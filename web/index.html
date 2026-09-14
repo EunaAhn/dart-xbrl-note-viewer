@@ -94,11 +94,19 @@ $('#companyBox').onchange = async e => {
   if (!hit) return;
   cik = hit.corp_code;
   const roles = await api('/roles', { cik, period: $('#period').value });
-  // DART 관례상 역할코드 끝자리 0은 연결, 5는 별도다. 둘의 한글명이 똑같아서
-  // 붙여주지 않으면 목록에 같은 이름이 두 번 나온다.
-  const suffix = id => ({ '0': ' (연결)', '5': ' (별도)' })[id.slice(-1)] || '';
+  // 연결(끝자리 0)과 별도(5)는 한글명이 똑같아 목록에 같은 이름이 두 번 나온다.
+  // 짝이 실제로 둘 다 있을 때만 구분자를 붙인다. D999005(주소 정보)처럼 끝자리가
+  // 5여도 짝이 없으면 별도가 아니고, 이름에 이미 '연결'이 들어있으면 군더더기다.
+  const ids = new Set(roles.map(r => r.id));
+  const suffix = r => {
+    const last = r.id.slice(-1);
+    if (last !== '0' && last !== '5') return '';
+    if (!ids.has(r.id.slice(0, -1) + (last === '0' ? '5' : '0'))) return '';
+    if (/연결|별도/.test(r.ko)) return '';
+    return last === '0' ? ' (연결)' : ' (별도)';
+  };
   $('#role').innerHTML = '<option value="">주석 목차 선택…</option>' +
-    roles.map(r => `<option value="${r.id}">${r.ko}${suffix(r.id)}</option>`).join('');
+    roles.map(r => `<option value="${r.id}">${r.ko}${suffix(r)}</option>`).join('');
   $('#status').textContent = `${hit.name} · 주석 ${roles.length}건`;
 };
 
