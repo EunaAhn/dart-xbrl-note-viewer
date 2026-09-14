@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DART XBRL 주석 뷰어</title>
+<style>
+  :root { --line:#e5e7eb; --muted:#6b7280; --accent:#4f46e5; --bg:#fff; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+         color:#111827; background:var(--bg); }
+  header { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+           padding:10px 16px; border-bottom:1px solid var(--line); position:sticky; top:0;
+           background:var(--bg); z-index:5; }
+  header h1 { font-size:15px; margin:0 12px 0 0; font-weight:700; white-space:nowrap; }
+  select, input { font:inherit; padding:6px 8px; border:1px solid var(--line);
+                  border-radius:6px; background:var(--bg); max-width:340px; }
+  main { display:flex; height:calc(100vh - 53px); }
+  #side { width:420px; min-width:220px; display:flex; flex-direction:column;
+          border-right:1px solid var(--line); resize:horizontal; overflow:hidden; }
+  #tree { flex:1; overflow:auto; padding:10px 6px; }
+  #pane { flex:1; overflow:auto; padding:14px 16px; }
+  .node { display:flex; align-items:center; gap:6px; padding:3px 6px; border-radius:6px;
+          cursor:pointer; white-space:nowrap; }
+  .node:hover { background:#f3f4f6; }
+  .node.sel { background:#eef2ff; color:var(--accent); }
+  .node .tag { color:var(--muted); font-size:11px; }
+  .node.abs { color:var(--muted); }
+  table { border-collapse:collapse; font-size:13px; }
+  th, td { border:1px solid var(--line); padding:5px 8px; vertical-align:top; }
+  thead th { background:#f9fafb; position:sticky; top:0; font-weight:600; font-size:12px;
+             white-space:nowrap; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.lbl { position:sticky; left:0; background:var(--bg); min-width:260px; }
+  tr.abs td.lbl { color:var(--muted); background:#fafafa; }
+  .meta { color:var(--muted); margin:0 0 10px; }
+  section { margin-bottom:26px; }
+  section h3 { font-size:13px; margin:0 0 6px; }
+  .scroll { overflow-x:auto; }
+  #detail { border-bottom:1px solid var(--line); padding:10px 12px; font-size:12px;
+            display:none; max-height:45%; overflow:auto; word-break:break-all; }
+  #detail dl { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; margin:6px 0 0; }
+  #detail dt { color:var(--muted); }
+  dd { margin:0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DART XBRL 주석 뷰어</h1>
+  <select id="period"></select>
+  <input id="companyBox" list="companyList" placeholder="회사 검색 (영문명)" size="34">
+  <datalist id="companyList"></datalist>
+  <select id="role"><option>회사를 먼저 고르세요</option></select>
+  <span id="status" class="meta"></span>
+</header>
+<main>
+  <div id="side">
+    <div id="detail"></div>
+    <div id="tree"></div>
+  </div>
+  <div id="pane"><p class="meta">회사와 주석 목차를 고르면 표가 나옵니다.</p></div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = (p, q) => fetch(`/api${p}?` + new URLSearchParams(q)).then(r =>
+  r.ok ? r.json() : r.json().then(e => Promise.reject(e.detail || r.statusText)));
+
+let companies = [], cik = null;
+
+// DART 값은 부호/콤마 없는 정수 문자열로 온다. 숫자면 천단위 구분을 넣고 우측 정렬한다.
+const isNum = v => /^-?\d+(\.\d+)?$/.test(v);
+const fmt = v => isNum(v) ? Number(v).toLocaleString('ko-KR') : v;
+
+async function init() {
+  const periods = await api('/periods');
+  $('#period').innerHTML = periods.map(p => `<option>${p}</option>`).join('');
+  $('#period').onchange = loadCompanies;
+  await loadCompanies();
+}
+
+async function loadCompanies() {
+  $('#status').textContent = '회사 목록 불러오는 중…';
+  companies = await api('/companies', { period: $('#period').value });
+  $('#companyList').innerHTML = companies
+    .map(c => `<option value="${c.name} (${c.corp_code})">`).join('');
+  $('#status').textContent = `${companies.length}개사`;
+}
+
+$('#companyBox').onchange = async e => {
+  const m = e.target.value.match(/\((\d{8})\)\s*$/);
+  const hit = m ? companies.find(c => c.corp_code === m[1])
+                : companies.find(c => c.name === e.target.value);
+  if (!hit) return;
+  cik = hit.corp_code;
+  const roles = await api('/roles', { cik, period: $('#period').value });
+  // DART 관례상 역할코드 끝자리 0은 연결, 5는 별도다. 둘의 한글명이 똑같아서
+  // 붙여주지 않으면 목록에 같은 이름이 두 번 나온다.
+  const suffix = id => ({ '0': ' (연결)', '5': ' (별도)' })[id.slice(-1)] || '';
+  $('#role').innerHTML = '<option value="">주석 목차 선택…</option>' +
+    roles.map(r => `<option value="${r.id}">${r.ko}${suffix(r.id)}</option>`).join('');
+  $('#status').textContent = `${hit.name} · 주석 ${roles.length}건`;
+};
+
+$('#role').onchange = () => {
+  const role = $('#role').value;
+  $('#detail').style.display = 'none';
+  if (!role) return;
+  drawTree(role);
+  drawTable(role);
+};
+
+function drawTree(role) {
+  const box = $('#tree');
+  box.textContent = '';
+  api(`/tree/${cik}/${encodeURIComponent(role)}`, { period: $('#period').value })
+    .then(roots => {
+      const walk = (n, d) => {
+        const el = document.createElement('div');
+        el.className = 'node' + (n.abstract ? ' abs' : '');
+        el.style.paddingLeft = (6 + d * 14) + 'px';
+        el.innerHTML = `<span>${n.abstract ? '▫' : '▪'}</span><span>${n.korean_label}</span>`;
+        el.onclick = () => {
+          box.querySelectorAll('.node.sel').forEach(x => x.classList.remove('sel'));
+          el.classList.add('sel');
+          showDetail(n.element_id);
+        };
+        box.appendChild(el);
+        n.children.forEach(c => walk(c, d + 1));
+      };
+      roots.forEach(r => walk(r, 0));
+    })
+    .catch(e => box.innerHTML = `<p class="meta">${e}</p>`);
+}
+
+function showDetail(elementId) {
+  api(`/element/${cik}/${encodeURIComponent(elementId)}`, { period: $('#period').value })
+    .then(d => {
+      const box = $('#detail');
+      box.style.display = 'block';
+      box.innerHTML = `<b>${d.korean_label}</b><dl>` + [
+        ['요소 ID', d.element_id], ['영문 라벨', d.english_label],
+        ['택사노미', d.taxonomy_id], ['데이터 타입', d.data_type],
+        ['기간 유형', d.period_type], ['차변/대변', d.balance || '—'],
+        ['abstract', d.abstract],
+      ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + '</dl>';
+      box.scrollIntoView({ block: 'nearest' });
+    })
+    .catch(() => {});
+}
+
+function drawTable(role) {
+  const pane = $('#pane');
+  pane.innerHTML = '<p class="meta">표 만드는 중…</p>';
+  api(`/table/${cik}/${encodeURIComponent(role)}`, { period: $('#period').value })
+    .then(d => {
+      if (!d.tables.length) {
+        pane.innerHTML = '<p class="meta">이 주석 목차에는 표로 만들 값이 없습니다.</p>';
+        return;
+      }
+      const one = t => {
+        const head = t.columns.map(c =>
+          `<th>${c.period}${c.members.map(m => `<div class="tag">${m}</div>`).join('')}</th>`
+        ).join('');
+        // 값 없는 abstract 행은 소제목 구실을 하므로 남기되 흐리게 둔다.
+        const body = t.rows.map(r => {
+          const tds = t.columns.map(c => {
+            const v = r.cells[c.contextId];
+            return v == null ? '<td></td>'
+                             : `<td class="${isNum(v) ? 'num' : ''}">${fmt(v)}</td>`;
+          }).join('');
+          return `<tr class="${r.abstract ? 'abs' : ''}">
+                    <td class="lbl" style="padding-left:${8 + r.depth * 12}px">${r.label}</td>
+                    ${tds}</tr>`;
+        }).join('');
+        return `<section>${t.title ? `<h3>${t.title}</h3>` : ''}
+                  <div class="scroll"><table>
+                    <thead><tr><th>계정과목</th>${head}</tr></thead>
+                    <tbody>${body}</tbody></table></div></section>`;
+      };
+      pane.innerHTML =
+        `<p class="meta">${$('#role').selectedOptions[0].textContent}
+            · 표 ${d.tables.length}개 · 단위 ${d.units.join(', ') || '—'}</p>`
+        + d.tables.map(one).join('');
+    })
+    .catch(e => pane.innerHTML = `<p class="meta">${e}</p>`);
+}
+
+init();
+</script>
+</body>
+</html>
