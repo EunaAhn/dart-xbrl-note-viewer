@@ -93,6 +93,28 @@ def _arcs(rows):
     return roots, children
 
 
+def build_tree(rows, label):
+    """표시 아크를 중첩 트리로 만든다.
+
+    같은 요소가 부모를 달리해 여러 번 나올 수 있으므로 아크마다 노드를 새로
+    만든다. 노드 객체를 공유하면 서브트리가 중복으로 붙는다. path는 순환 방어용.
+    """
+    roots, children = _arcs(rows)
+
+    def build(r, path):
+        eid = r["element_id"]
+        return {
+            "element_id": eid,
+            "korean_label": label(r, "ko"),
+            "english_label": label(r, "en"),
+            "abstract": r["abstract"] == "true",
+            "children": [] if eid in path else
+                        [build(c, path | {eid}) for c in children[eid]],
+        }
+
+    return [build(r, frozenset()) for r in roots]
+
+
 def _labels(period, cik, element_ids):
     """(element_id, label_role_uri, lang) -> label"""
     if not element_ids:
@@ -118,22 +140,8 @@ def tree(cik: str, role_id: str, period: str):
     if not rows:
         raise HTTPException(404, "해당 주석 목차의 트리를 찾지 못했습니다.")
     labels = _labels(period, cik, {r["element_id"] for r in rows})
-    roots, children = _arcs(rows)
-
-    # 같은 요소가 부모를 달리해 여러 번 나올 수 있으므로 아크마다 노드를 새로 만든다.
-    # 노드 객체를 공유하면 서브트리가 중복으로 붙는다. path는 순환 방어용이다.
-    def build(r, path):
-        eid = r["element_id"]
-        return {
-            "element_id": eid,
-            "korean_label": _label_of(labels, eid, r["preferredlabel"], "ko"),
-            "english_label": _label_of(labels, eid, r["preferredlabel"], "en"),
-            "abstract": r["abstract"] == "true",
-            "children": [] if eid in path else
-                        [build(c, path | {eid}) for c in children[eid]],
-        }
-
-    return [build(r, frozenset()) for r in roots]
+    return build_tree(rows, lambda r, lang: _label_of(
+        labels, r["element_id"], r["preferredlabel"], lang))
 
 
 def _context_periods(period, cik):
