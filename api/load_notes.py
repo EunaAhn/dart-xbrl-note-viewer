@@ -6,6 +6,7 @@ zip 안의 TSV를 풀지 않고 스트리밍해서 COPY로 밀어넣는다. 8.6G
 
     python load_notes.py /data/2026_2Q_20260912010317.zip --period 2026_HY
     python load_notes.py ... --max-cik 00200000   # 앞쪽 회사만, 스모크 테스트용
+    python load_notes.py ... --only def.tsv       # 그 파일만 다시 적재
 """
 import argparse
 import os
@@ -17,7 +18,7 @@ import zipfile
 import psycopg
 
 # TSV 파일 -> (테이블, period를 뺀 컬럼 목록). TSV 헤더 순서와 반드시 같아야 한다.
-# def/cal/txn/txn-dts는 트리와 표를 그리는 데 쓰지 않아 넣지 않는다.
+# cal/txn/txn-dts는 트리와 표를 그리는 데 쓰지 않아 넣지 않는다.
 TABLES = {
     "sub.tsv": ("sub", ["cik", "report_date", "submission_datetime", "taxonomy_id"]),
     "role.tsv": ("role_", ["cik", "report_date", "taxonomy_id", "role_id", "role_uri",
@@ -28,6 +29,9 @@ TABLES = {
     "pre.tsv": ("pre", ["cik", "report_date", "role_id", "element_id", "taxonomy_id",
                         "parent_element_id", "parent_taxonomy_id", "arcrole", "ord",
                         "use_", "priority", "preferredlabel"]),
+    "def.tsv": ("def", ["cik", "report_date", "role_id", "element_id", "taxonomy_id",
+                        "parent_element_id", "parent_taxonomy_id", "arcrole", "ord",
+                        "use_", "priority"]),
     "lab.tsv": ("lab", ["cik", "report_date", "label_role_uri", "elmt_id", "taxonomy_id",
                         "lang", "label"]),
     "cntxt.tsv": ("cntxt", ["cik", "report_date", "context_id", "axis_element_id",
@@ -39,16 +43,18 @@ TABLES = {
 }
 
 # 적재가 끝난 뒤 만드는 인덱스. COPY 도중에 인덱스가 있으면 몇 배 느려진다.
-INDEXES = [
-    "CREATE INDEX ON sub (period, cik)",
-    "CREATE INDEX ON role_ (period, cik, role_id)",
-    "CREATE INDEX ON elmt (period, element_id)",
-    "CREATE INDEX ON pre (period, cik, role_id)",
-    "CREATE INDEX ON lab (period, cik, elmt_id)",
-    "CREATE INDEX ON cntxt (period, cik, context_id)",
-    "CREATE INDEX ON val (period, cik, element_id)",
-    "CREATE INDEX ON val (period, cik, context_id)",
-]
+# 이름은 Postgres 자동 이름과 같게 둬서 다시 적재해도 IF NOT EXISTS로 중복이 안 생긴다.
+INDEXES = [(t, cols) for t, cols in [
+    ("sub", "period, cik"),
+    ("role_", "period, cik, role_id"),
+    ("elmt", "period, element_id"),
+    ("pre", "period, cik, role_id"),
+    ("def", "period, cik, role_id"),
+    ("lab", "period, cik, elmt_id"),
+    ("cntxt", "period, cik, context_id"),
+    ("val", "period, cik, element_id"),
+    ("val", "period, cik, context_id"),
+]]
 
 CHUNK = 8 << 20
 
@@ -112,6 +118,7 @@ def main():
     ap.add_argument("zip_path")
     ap.add_argument("--period", required=True, help="예: 2026_HY")
     ap.add_argument("--max-cik", help="이 CIK 이상은 건너뛴다 (스모크 테스트용)")
+    ap.add_argument("--only", nargs="+", choices=list(TABLES), help="이 TSV만 적재")
     ap.add_argument("--dsn", default=os.environ.get("DATABASE_URL"))
     args = ap.parse_args()
 
@@ -125,17 +132,20 @@ def main():
         if missing:
             sys.exit(f"zip에 없는 파일: {missing}")
 
+        with conn.cursor() as cur:
+            cur.execute(open(os.path.join(os.path.dirname(__file__), "schema.sql")).read())
         print(f"적재 시작: {args.period}", flush=True)
-        for name in TABLES:
+        for name in args.only or TABLES:
             # elmt.tsv에는 CIK 컬럼이 없어 회사 기준으로 자를 수 없다.
             load(conn, zf, name, args.period, None if name == "elmt.tsv" else args.max_cik)
 
         print("인덱스 생성 중...", flush=True)
         with conn.cursor() as cur:
-            for stmt in INDEXES:
+            for table, cols in INDEXES:
                 t0 = time.time()
-                cur.execute(stmt)
-                print(f"  {stmt.split('ON ')[1]:32} {time.time()-t0:6.1f}s", flush=True)
+                name = f"{table}_{cols.replace(', ', '_')}_idx"
+                cur.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})")
+                print(f"  {name:32} {time.time()-t0:6.1f}s", flush=True)
             cur.execute("ANALYZE")
         conn.commit()
     print("완료", flush=True)
