@@ -14,6 +14,29 @@ web (nginx :8080)  →  /api/*  →  api (FastAPI)  →  db (Postgres 16)
 
 컨테이너 3개. 프론트엔드는 빌드 단계가 없는 정적 HTML + 바닐라 JS라 nginx가 그대로 서빙합니다.
 
+## 프론트엔드 파일
+
+프론트엔드는 `web/` 폴더의 파일 3개가 전부입니다. 프레임워크·npm·번들러 없이 파일 하나가 화면 전체입니다.
+
+| 파일 | 역할 |
+|---|---|
+| `web/index.html` | 화면 전체. CSS(`<style>`), 마크업, JS(`<script>`)가 한 파일에 있습니다 |
+| `web/nginx.conf` | `/`는 `index.html`을 서빙(`no-cache`), `/api/*`는 FastAPI(`api:8000`)로 프록시 |
+| `web/check_note.cjs` | `index.html`의 표 렌더링 함수를 꺼내 돌리는 Node 자가 점검 (`node web/check_note.cjs`) |
+
+`web/index.html` 안의 구성:
+
+| 영역 | 마크업 | 담당 함수 | 호출 API |
+|---|---|---|---|
+| 상단바 (보고서 기간, 사업자 검색 버튼, 선택 회사) | `header.topbar` | `init`, `loadCompanies` | `/periods`, `/companies` |
+| 통계 카드 (회사 수, 보고서 수, 기준일) | `.stats` | `loadStats` | `/stats` |
+| 사업자 검색 팝업 | `#searchOverlay` | `openSearch`, `closeSearch`, `renderResults`, `selectCompany` | `/roles` |
+| 좌측 목차 트리 (한글/영문 라벨 전환) | `#side`, `#toc` | `drawToc`, `groupOf` | |
+| 우측 본문·주석 표 | `#pane` | `showRole`, `stmtCard`, `noteCard`, `gridTable`, `textBox`, `axisInfo`, `foldInstants` | `/tree/{회사}/{목차}`, `/table/{회사}/{목차}` |
+| 우측 기초 정보 (D999xxx 보고서정보) | `#pane` | `showInfo`, `structTable` | `/table/...` |
+
+공통 헬퍼: `api`(`/api` 호출 래퍼), `esc`(HTML 이스케이프), `cell`(숫자 서식), `periodName`(컨텍스트 → 기간 이름).
+
 ## 실행
 
 1. OpenDART에 로그인해 **재무정보 다운로드 → 주석 일괄다운로드**에서 원하는 보고서 zip을
