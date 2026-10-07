@@ -19,12 +19,17 @@
 그대로 씁니다. 설치도 `docker compose up` 한 줄, 회사 컴퓨터 한 대 감당 못 할 사양이
 아닙니다.
 
+`api/schema.mssql.sql`은 같은 테이블을 SQL Server로 옮길 때 쓰는 정의입니다(긴 라벨·요소 ID 때문에
+인덱스 키 길이를 조정해 둠). API(`api/main.py`)와 적재 스크립트(`load_notes.py`)는 위 이유로
+Postgres 전용(`psycopg`, `ANY(%s)`, `DISTINCT ON`, `COPY`)이라, SQL Server로 바꾸려면 그 쿼리들도
+같이 고쳐야 합니다.
+
 ## 2. 스키마 설계 — 조회에 맞춘 이유
 
-`api/schema.sql`의 7개 테이블은 이미 "표 하나를 그리는 데 필요한 조회"를 기준으로
-쪼개져 있습니다. 핵심 설계 포인트:
+`api/schema.sql`의 테이블 9개(주석 TSV 8개 + 한글 회사명 `company`)는 "표 하나를 그리는 데
+필요한 조회"를 기준으로 쪼개져 있습니다. 핵심 설계 포인트:
 
-- **모든 테이블에 `period` 컬럼.** 여러 보고서(분기·반기·연간)를 한 DB에 같이
+- **`company` 말고는 모든 테이블에 `period` 컬럼.** 여러 보고서(분기·반기·연간)를 한 DB에 같이
   적재하고, `WHERE period = %s`로만 갈라 봅니다. 보고서마다 DB를 새로 만들 필요가
   없습니다.
 - **조회 키는 항상 `(period, cik, ...)` 순서.** 실제 API 코드도 항상 이 순서로
@@ -33,38 +38,36 @@
 - **인덱스는 적재 후 생성.** `COPY`로 수백만 행을 넣을 때 인덱스가 미리 있으면
   몇 배 느려집니다. `load_notes.py`가 적재 → `ANALYZE` 순서를 지키는 이유입니다.
 - **`val`(값) 테이블에 인덱스 2개**: `(period, cik, element_id)`와
-  `(period, cik, context_id)`. 트리 클릭 시 "이 요소의 값"과 "이 표의 컨텍스트
-  전체" 양쪽으로 다 조회하기 때문에 각각 필요합니다.
+  `(period, cik, context_id)`. 목차를 열 때 "이 요소들의 값"과 "이 컨텍스트들의
+  축·기간" 양쪽으로 다 조회하기 때문에 각각 필요합니다.
+- **`def`(정의 링크베이스)는 표마다 열을 가르는 데 씁니다.** 주석 안 표마다 하위 목차
+  (`role-D822390a`…)에 그 표의 축·멤버가 있습니다. API는 이걸로 그 표에 들어갈 값을
+  거르고, 화면은 같은 목록(`cube`)으로 값 없는 조합 열까지 그립니다(빈 열 표시).
 
-### 지금 당장은 안 넣은 것 (회사명 검색용 `company` 테이블)
+### 회사명 검색 (`company` 테이블)
 
-팝업 "사업자 검색"은 지금 `/api/companies`가 돌려주는 목록(회사당 한 줄, 보통
-수천 건)을 브라우저 메모리에서 필터링합니다. 이 규모에서는 DB 인덱스가 필요
-없습니다 — 굳이 넣으면 안 쓰는 인덱스만 하나 늘어납니다 (YAGNI).
+주석 TSV에는 영문 제출인명만 있어서, 한글 회사명은 OpenDART 고유번호 파일(`corpCode.xml`)을
+`company` 테이블에 따로 넣습니다(`api/load_companies.py`). `/api/companies`가 `sub`와 `company`를
+조인해서, 한글명이 있으면 한글명, 없으면 영문 제출인명을 돌려줍니다.
 
-다만 아래 두 가지가 **실제로 문제가 되면** 이렇게 확장하세요:
+```bash
+curl -o data/corpCode.zip "https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key=<API키>"
+docker compose run --rm --entrypoint python api load_companies.py /data/corpCode.zip
+```
 
-1. **회사명이 영문이라 검색이 불편하다** → OpenDART API 키로 `corpCode.xml`을
-   받아 다음 테이블을 추가하고 `sub.cik`에 조인:
+홈 화면의 회사 검색은 이 목록(회사당 한 줄, 보통 수천 건)을 브라우저 메모리에서 거릅니다.
+이 규모에서는 DB 검색 인덱스가 필요 없습니다. 굳이 넣으면 안 쓰는 인덱스만 하나 늘어납니다.
 
-   ```sql
-   CREATE TABLE company (
-       cik         text PRIMARY KEY,   -- corp_code
-       corp_name   text NOT NULL,      -- 한글명
-       corp_eng_name text,
-       stock_code  text
-   );
-   CREATE INDEX company_name_trgm ON company USING gin (corp_name gin_trgm_ops);
-   ```
-   (`CREATE EXTENSION pg_trgm;` 먼저 필요) — 이러면 `ILIKE '%삼성%'` 같은 부분
-   일치 검색도 인덱스를 탑니다. `/api/companies`가 `sub`와 `company`를 조인하도록
-   한 줄만 고치면 됩니다.
+회사 수가 수만 건으로 늘어나 브라우저 필터링이 느려지면, 그때 아래처럼 확장하세요.
+- 검색창 입력을 `/api/companies?q=검색어`로 서버에서 조회하게 바꿉니다.
+- 트라이그램 인덱스로 받쳐줍니다.
 
-2. **회사 수가 수만 건으로 늘어나 브라우저 필터링이 느려진다** → 팝업 입력을
-   `/api/companies?q=검색어`로 서버 조회하게 바꾸고, 위 트라이그램 인덱스로
-   받쳐줍니다.
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX company_name_trgm ON company USING gin (corp_name gin_trgm_ops);
+```
 
-지금 규모(회사당 한 페이지 응답, 클라이언트 필터)에서는 둘 다 불필요합니다.
+이러면 `ILIKE '%삼성%'` 같은 부분 일치 검색도 인덱스를 탑니다.
 
 ## 3. 처음 쓰는 사람이 사이트를 열기까지
 
@@ -105,13 +108,15 @@
    보고서 하나 적재에 수 분~수십 분 걸립니다(진행 로그가 파일별로 뜹니다).
    빠르게 동작만 확인하고 싶으면 `--max-cik 00130000`을 붙여 앞쪽 330개사만
    넣어보세요(약 1분).
-5. **브라우저 열기.** <http://localhost:8080> 접속. 상단에서 기간을 고르고
-   "🔍 사업자 검색" 버튼으로 회사를 찾으면 왼쪽에 주석 목차, 오른쪽에 표가
-   뜹니다.
+5. **(선택) 한글 회사명 넣기.** OpenDART API 키가 있으면 위 "회사명 검색"의 두 줄을 실행합니다.
+   안 넣으면 영문 회사명으로만 검색됩니다.
+6. **브라우저 열기.** <http://localhost:8080> 접속.
+   - 왼쪽 "회사 선택"을 눌러 회사를 고르고, 보고서를 체크한 뒤 **검색**을 누릅니다.
+   - 결과에서 **XBRL 보기**를 누르면 새 탭에 뷰어가 열립니다. 왼쪽이 목차, 오른쪽이 기초 정보와 본문·주석 표입니다.
 
 ### 다른 사람 컴퓨터에서도 그대로
 
-각 팀원이 위 1~5단계를 자기 컴퓨터에서 그대로 반복하면, 각자 자기 PC 안에서
+각 팀원이 위 1~6단계를 자기 컴퓨터에서 그대로 반복하면, 각자 자기 PC 안에서
 완전히 독립된 Postgres에 데이터가 들어가고 자기 브라우저로만 조회합니다. 서버
 한 대를 공유하지 않으므로 DB 계정이나 방화벽 설정을 조율할 필요가 없습니다 —
 그만큼 "내 데이터가 남의 PC에 노출될 걱정"도 없습니다.

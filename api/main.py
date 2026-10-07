@@ -392,6 +392,8 @@ def table(cik: str, role_id: str, period: str, lang: str = "ko"):
         for c in cols:
             c.pop("_sort")
         out.append({"title": t["title"], "elementId": t["elementId"],
-                    "columns": cols, "rows": t["rows"]})
+                    "columns": cols, "rows": t["rows"],
+                    # 화면의 "빈 열 표시"용: 이 표 하이퍼큐브의 축 -> 멤버(값 없는 조합도 열로 그린다).
+                    "cube": {a: sorted(ms) for a, ms in t["cube"].items()}})
 
     return {"roleTitle": role_id, "tables": out, "units": sorted(units)}

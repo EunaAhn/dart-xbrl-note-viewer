@@ -3,600 +3,259 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DART XBRL 뷰어</title>
+<title>XBRL Viewer</title>
 <style>
+  * { box-sizing: border-box; }
   :root {
-    --navy:#0f172a; --navy-2:#1e293b; --line:#e2e8f0; --muted:#64748b;
-    --accent:#0ea5a3; --accent-dark:#0b8482; --bg:#f4f4f4; --card:#fff;
+    --primary: #f5c400; --primary-soft: #fff7d6; --primary-light: #fffbed;
+    --text: #1f2933; --text-soft: #606a76; --bg: #f6f7f9; --white: #fff;
+    --border: #dfe3e8; --border-soft: #edf0f3; --danger: #c0392b;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; font:14px/1.5 -apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
-         color:#161616; background:var(--bg); }
+  body { margin: 0; font-family: "Pretendard", "Apple SD Gothic Neo", Arial, sans-serif; background: var(--bg); color: var(--text); }
+  button, input, select { font-family: inherit; }
+  .hidden { display: none !important; }
 
-  /* topbar */
-  header.topbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap;
-           padding:10px 18px; background:var(--navy); color:#fff; position:sticky; top:0; z-index:20; }
-  header.topbar h1 { font-size:15px; margin:0 14px 0 0; font-weight:700; white-space:nowrap; }
-  header.topbar select { font:inherit; padding:6px 8px; border:1px solid #334155;
-                  border-radius:6px; background:var(--navy-2); color:#fff; }
-  .btn-search { font:inherit; padding:6px 12px; border:1px solid var(--accent);
-                border-radius:6px; background:var(--accent); color:#032826; font-weight:600;
-                cursor:pointer; }
-  .btn-search:hover { background:var(--accent-dark); }
-  .chip { padding:5px 10px; border-radius:999px; background:var(--navy-2); font-size:12.5px; }
-  .meta { color:#94a3b8; margin-left:auto; }
+  .top-nav { height: 50px; background: var(--white); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 18px; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; }
+  .brand img { height: 20px; }
+  .brand-fallback { width: 20px; height: 20px; background: var(--primary); border-radius: 4px; display: inline-block; }
 
-  /* dashboard overview cards */
-  .stats { display:flex; gap:14px; padding:14px 18px; background:var(--navy);
-           border-top:1px solid #1e293b; }
-  .stat-card { background:var(--navy-2); border-radius:10px; padding:10px 16px; color:#fff;
-               min-width:140px; }
-  .stat-card .num { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
-  .stat-card .label { font-size:11.5px; color:#94a3b8; margin-top:2px; }
+  .layout { display: flex; min-height: calc(100vh - 50px); }
+  .sidebar { width: 360px; background: var(--white); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+  .sidebar-title { height: 58px; display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid var(--border); background: var(--primary-light); }
+  .sidebar-title h2 { font-size: 16px; margin: 0; font-weight: 800; }
+  .filter-section { padding: 14px 16px; border-bottom: 1px solid var(--border-soft); }
+  .section-header { background: var(--primary-soft); min-height: 36px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between;
+                    font-weight: 800; font-size: 13px; border: 1px solid #f0dc8a; border-radius: 6px; cursor: pointer; line-height: 1.4; }
+  .section-header:hover { background: #fff1b8; }
+  .filter-label { display: block; font-size: 12px; color: var(--text-soft); margin-bottom: 9px; font-weight: 700; }
+  .check-row { display: flex; align-items: center; gap: 8px; height: 29px; font-size: 14px; }
+  .sidebar-actions { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; height: 66px; border-top: 1px solid var(--border); }
+  .reset-btn, .search-btn { border: none; font-weight: 800; cursor: pointer; font-size: 15px; }
+  .reset-btn { background: var(--white); color: var(--text-soft); border-right: 1px solid var(--border); }
+  .reset-btn:hover { background: #f9fafb; }
+  .search-btn { background: var(--primary); color: var(--text); }
+  .search-btn:hover { background: #e7b900; }
 
-  /* layout */
-  .layout { display:flex; height:calc(100vh - 49px); }
-  #side { width:280px; min-width:200px; display:flex; flex-direction:column;
-          background:var(--card); border-right:1px solid var(--line); resize:horizontal; overflow:hidden; }
-  .toc-head { display:flex; align-items:center; justify-content:space-between; padding:12px 10px 10px;
-              border-bottom:1px solid var(--line); }
-  .toc-head select { font:inherit; padding:5px 8px; border:none; border-bottom:1px solid #8d8d8d; background:#f4f4f4; }
-  #toc { flex:1; overflow:auto; }
-  #toc details { border-bottom:1px solid var(--line); }
-  #toc summary { padding:12px 10px; cursor:pointer; font-size:14px; }
-  #toc .item { padding:9px 10px 9px 24px; cursor:pointer; font-size:13.5px; color:#393939; }
-  #toc .item:hover { background:#f4f4f4; }
-  #toc .item.sel { background:#e0e0e0; }
-  #pane { flex:1; overflow:auto; padding:18px 22px; }
+  .main-content { flex: 1; overflow: auto; display: flex; flex-direction: column; }
+  .header-bar { background: #2b3036; color: #fff; padding: 20px; border-bottom: 3px solid var(--primary); }
+  .header-bar h1 { margin: 0 0 10px; font-size: 28px; font-weight: 900; }
+  .header-bar p { margin: 0; font-size: 14px; color: #eef1f4; }
+  .badge { display: inline-block; background: var(--primary); color: var(--text); padding: 4px 8px; border-radius: 4px; font-weight: 800; margin-right: 8px; }
+  .stats { display: flex; gap: 12px; margin-top: 16px; }
+  .stat-card { background: #383e45; border-radius: 6px; padding: 8px 14px; min-width: 130px; }
+  .stat-card strong { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat-card small { color: #c7ccd2; font-size: 11.5px; }
 
-  /* 페이지 머리 */
-  .crumb { color:var(--muted); font-size:13px; }
-  .page-title { font-size:24px; font-weight:400; margin:4px 0 14px; }
-  .role-header { display:flex; align-items:center; gap:10px; padding:12px 16px; background:var(--card);
-                 border-bottom:1px solid var(--line); }
-  .role-header b { font-weight:600; }
-  .role-header .btn { margin-left:auto; }
-  .kind { font-size:12px; padding:2px 10px; border-radius:999px; background:#e8daff; color:#6929c4; }
-  .kind.sep { background:#9ef0f0; color:#005d5d; }
-  .btn { font:inherit; font-size:13px; padding:6px 12px; border:none; background:#0f62fe; color:#fff; cursor:pointer; }
-  .btn.ghost { background:none; color:#0f62fe; }
-  .view { background:var(--card); padding:4px 20px 24px; margin-bottom:18px; }
-  .placeholder { color:var(--muted); padding:40px 0; text-align:center; }
-  .tag { color:var(--muted); font-size:11.5px; font-weight:400; }
+  .empty-state { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 120px 20px; color: var(--text-soft); }
+  .empty-icon { font-size: 48px; margin-bottom: 20px; opacity: .3; }
+  .empty-state h2 { margin: 0 0 16px; font-size: 20px; color: var(--text); font-weight: 700; }
+  .empty-state p { margin: 0; font-size: 15px; line-height: 1.8; }
 
-  /* 본문 재무제표 */
-  .unit { display:block; text-align:right; max-width:720px; font-size:12.5px; color:var(--muted); margin-bottom:4px; }
-  table.st { border-collapse:collapse; font-size:13px; }
-  table.st th, table.st td { border:1px solid #c6c6c6; padding:4px 18px 4px 10px; }
-  table.st thead th { background:#e0e0e0; font-weight:600; text-align:center; min-width:180px; }
-  table.st td.lbl { background:#e0e0e0; min-width:340px; font-weight:500; }
-  table.st tr.abs td.lbl { font-weight:600; }
+  .result-area { flex: 1; padding: 20px; background: var(--white); }
+  .result-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .result-header h2 { margin: 0; font-size: 18px; font-weight: 800; }
+  .result-header span { font-size: 16px; color: var(--primary); font-weight: 700; }
+  .report-list { overflow-x: auto; }
+  .xbrl-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .xbrl-table th { background: #f9fafb; padding: 14px; text-align: left; font-weight: 800; border-bottom: 2px solid var(--border); }
+  .xbrl-table td { padding: 12px 14px; border-bottom: 1px solid var(--border-soft); }
+  .xbrl-table tbody tr:hover { background: var(--primary-light); }
+  .mono { font-family: Consolas, monospace; font-size: 12px; }
+  .view-btn { background: var(--primary); color: var(--text); border: none; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .view-btn:hover { background: #e7b900; }
 
-  /* 주석 표 */
-  .outline-h { font-size:14px; margin:16px 0 8px; }
-  .outline { background:#f1f3f5; padding:6px 22px; max-width:950px; font-size:13px; }
-  .outline div { padding:5px 0; }
-  .outline .l1 { padding-left:24px; }
-  details.psel { position:relative; display:inline-block; margin:16px 0 4px; }
-  details.psel summary { list-style:none; cursor:pointer; min-width:280px; padding:8px 14px;
-                         background:#eef0f3; border-bottom:1px solid #94a3b8; }
-  details.psel summary::after { content:"⌄"; float:right; margin-left:12px; }
-  details.psel .opts { position:absolute; z-index:5; background:#fff; border:1px solid var(--line);
-                       box-shadow:0 6px 18px rgba(0,0,0,.12); padding:6px 12px; min-width:100%; }
-  details.psel label { display:block; padding:4px 0; white-space:nowrap; cursor:pointer; }
-  .plabel { margin:14px 0 6px; font-size:13.5px; }
-  p.fn { margin:0 0 16px; padding:10px 14px; background:#f4f4f4; font-size:13px; white-space:pre-wrap; max-width:1000px; }
-  .scroll { overflow-x:auto; }
-  table.xt { border-collapse:collapse; font-size:13px; border:1px solid #c3c9d2; }
-  table.xt th, table.xt td { border:1px solid #c3c9d2; padding:6px 12px; vertical-align:top; }
-  table.xt thead th { background:#dde1e6; text-align:center; font-weight:600; min-width:180px; font-size:12.5px; }
-  table.xt th.rh { background:#e5e2e2; text-align:left; font-weight:600; font-size:12.5px; min-width:120px;
-                   max-width:220px; vertical-align:middle; }
-  table.xt td { background:#fff; min-width:180px; }
-  td.num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
-  td.neg { color:#da1e28; }
-
-  /* 기초 정보 */
-  .info { display:flex; gap:16px; align-items:flex-start; }
-  .info nav { width:260px; background:var(--card); position:sticky; top:0; }
-  .info nav a { display:block; padding:6px 14px; color:#393939; text-decoration:none; font-size:13.5px;
-                border-left:3px solid transparent; }
-  .info nav a:hover { background:#e8e8e8; border-left-color:#0f62fe; }
-  .info .body { flex:1; background:var(--card); padding:8px 16px 20px; }
-  .info section { border-bottom:1px solid var(--line); padding:8px 0 24px; }
-  .info h3 { font-size:15px; font-weight:500; margin:14px 0 16px; }
-  .kv { display:grid; grid-template-columns:280px 1fr; max-width:1000px; }
-  .kv dt { background:#f4f4f4; padding:9px 16px; font-size:13.5px; }
-  .kv dd { margin:0; padding:9px 16px; font-size:13.5px; }
-
-  /* XBRL 구조 및 속성 */
-  table.struct { border-collapse:collapse; font-size:12.5px; background:#fff; width:100%; }
-  table.struct th, table.struct td { border-bottom:1px solid var(--line); padding:5px 10px; white-space:nowrap; text-align:left; }
-  table.struct thead th { background:#f4f4f4; position:sticky; top:0; }
-  table.struct td:first-child { background:#edf5ff; }
-  table.struct tr.abs td { font-weight:600; }
-
-  /* 사업자 검색 popup */
-  .overlay { position:fixed; inset:0; background:rgba(15,23,42,.5); display:flex;
-             align-items:flex-start; justify-content:center; padding-top:10vh; z-index:50; }
-  .overlay.hidden { display:none; }
-  .modal { background:#fff; width:520px; max-width:92vw; max-height:70vh; border-radius:10px;
-           box-shadow:0 20px 50px rgba(0,0,0,.3); display:flex; flex-direction:column; overflow:hidden; }
-  .modal-head { display:flex; align-items:center; gap:8px; padding:12px; border-bottom:1px solid var(--line); }
-  .modal-head input { flex:1; font:15px inherit; padding:9px 10px; border:1px solid var(--line);
-                       border-radius:6px; }
-  .modal-head input:focus { outline:2px solid var(--accent); border-color:var(--accent); }
-  .icon-btn { border:none; background:none; font-size:16px; cursor:pointer; color:var(--muted); padding:4px 8px; }
-  .modal-list { overflow:auto; }
-  .modal-row { display:flex; justify-content:space-between; gap:10px; padding:10px 14px;
-               cursor:pointer; border-bottom:1px solid #f1f5f9; }
-  .modal-row:hover { background:#f0fdfa; }
-  .modal-row .code { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
-  .modal-empty { padding:24px 14px; color:var(--muted); text-align:center; }
+  .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--white); border: 1px solid var(--border); border-radius: 8px;
+           z-index: 1000; width: 500px; max-width: 92vw; box-shadow: 0 10px 40px rgba(0,0,0,.15); }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .modal-header h2 { margin: 0; font-size: 16px; font-weight: 800; }
+  .modal-close { border: none; background: transparent; font-size: 20px; cursor: pointer; color: var(--text-soft); }
+  .modal-search { padding: 12px 20px; border-bottom: 1px solid var(--border-soft); }
+  .modal-search input { width: 100%; height: 36px; border: 1px solid var(--border); padding: 0 12px; border-radius: 4px; font-size: 14px; }
+  .company-list { max-height: 300px; overflow-y: auto; }
+  .company-item { padding: 12px 20px; border-bottom: 1px solid var(--border-soft); cursor: pointer; }
+  .company-item:hover { background: var(--primary-light); }
+  .company-item.selected { background: var(--primary-soft); font-weight: 700; }
+  .company-item strong { display: block; margin-bottom: 4px; }
+  .company-item small { display: block; font-size: 12px; color: var(--text-soft); }
+  .modal-footer { padding: 12px 20px; text-align: right; border-top: 1px solid var(--border-soft); }
+  .modal-confirm-btn { background: var(--primary); border: none; padding: 10px 20px; border-radius: 4px; font-weight: 800; cursor: pointer; }
+  .modal-confirm-btn:hover { background: #e7b900; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.3); z-index: 999; }
+  .message-box { padding: 20px; text-align: center; color: #999; }
+  .error-box { padding: 20px; color: var(--danger); background: #fff1f2; border: 1px solid #fecdd3; }
 </style>
 </head>
 <body>
-<header class="topbar">
-  <h1>DART XBRL 뷰어</h1>
-  <select id="period"></select>
-  <button id="openSearch" class="btn-search" type="button">🔍 사업자 검색</button>
-  <span id="companyChip" class="chip">회사를 선택하세요</span>
-  <span id="status" class="meta"></span>
+<header class="top-nav">
+  <div class="brand">
+    <img src="/static/image1.png" alt="" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend','<span class=&quot;brand-fallback&quot;></span>');">
+    <span>XBRL Viewer</span>
+  </div>
 </header>
 
-<div class="stats">
-  <div class="stat-card"><div class="num" id="statCompanies">—</div><div class="label">적재된 회사 수</div></div>
-  <div class="stat-card"><div class="num" id="statReports">—</div><div class="label">적재된 보고서 수</div></div>
-  <div class="stat-card"><div class="num" id="statUpdated">—</div><div class="label">최신 보고서 기준일</div></div>
-</div>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-title"><h2>검색 조건</h2></div>
 
-<main class="layout">
-  <div id="side">
-    <div class="toc-head"><span>목차</span>
-      <select id="lang"><option value="ko">표시 한글명</option><option value="en">표시 영어명</option></select></div>
-    <div id="toc"><p class="placeholder">사업자 검색으로 회사를 먼저 고르세요.</p></div>
-  </div>
-  <div id="pane"><p class="placeholder">회사를 고르면 재무제표 본문·주석·기초 정보가 나옵니다.</p></div>
-</main>
-
-<div id="searchOverlay" class="overlay hidden">
-  <div class="modal">
-    <div class="modal-head">
-      <input id="modalInput" placeholder="회사명(한글/영문), 종목코드(6자리), 고유번호(8자리)로 검색" autocomplete="off">
-      <button id="closeSearch" class="icon-btn" type="button">✕</button>
+    <div class="filter-section">
+      <div class="section-header" id="companySelectBtn" role="button" tabindex="0">
+        <span id="selectedCompanyDisplay">회사 선택</span><span>+</span>
+      </div>
     </div>
-    <div id="modalList" class="modal-list"></div>
-  </div>
+
+    <div class="filter-section">
+      <label class="filter-label">보고서 (적재된 기간)</label>
+      <div id="periodList"><div class="message-box">불러오는 중...</div></div>
+    </div>
+
+    <div class="sidebar-actions">
+      <button class="reset-btn" id="resetBtn" type="button">초기화</button>
+      <button class="search-btn" id="searchBtn" type="button">검색</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <div class="header-bar">
+      <h1>XBRL Viewer</h1>
+      <p><span class="badge">XBRL Viewer</span>는 DART 주석 일괄다운로드 데이터를 보고서별로 보여줍니다.</p>
+      <div class="stats">
+        <div class="stat-card"><strong id="statCompanies">—</strong><small>적재된 회사 수</small></div>
+        <div class="stat-card"><strong id="statReports">—</strong><small>적재된 보고서 수</small></div>
+        <div class="stat-card"><strong id="statUpdated">—</strong><small>최신 보고서 기준일</small></div>
+      </div>
+    </div>
+
+    <div id="emptyState" class="empty-state">
+      <div class="empty-icon">▤</div>
+      <h2>원하시는 보고서를 찾아보세요</h2>
+      <p>좌측 패널에서 회사를 선택하고<br>검색 버튼을 클릭해 주세요.</p>
+    </div>
+
+    <div id="resultArea" class="result-area hidden">
+      <div class="result-header"><h2>검색 결과</h2><span id="resultCount">0건</span></div>
+      <div class="report-list" id="reportList"></div>
+    </div>
+  </main>
 </div>
+
+<div id="companyModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-header">
+    <h2 id="modalTitle">회사 선택</h2>
+    <button id="modalCloseBtn" class="modal-close" type="button" aria-label="닫기">✕</button>
+  </div>
+  <div class="modal-search">
+    <input id="modalCompanyInput" type="text" autocomplete="off" placeholder="회사명(한글/영문), 종목코드, 고유번호 (예: 삼성전자)">
+  </div>
+  <div id="companyList" class="company-list"></div>
+  <div class="modal-footer"><button id="modalConfirmBtn" class="modal-confirm-btn" type="button">확인</button></div>
+</div>
+<div id="modalOverlay" class="modal-overlay hidden"></div>
 
 <script>
 const $ = s => document.querySelector(s);
 const api = (p, q) => fetch(`/api${p}?` + new URLSearchParams(q)).then(r =>
   r.ok ? r.json() : r.json().then(e => Promise.reject(e.detail || r.statusText)));
-
-let companies = [], company = null, roles = [], current = null;
-const lang = () => $('#lang').value;
-const L = n => lang() === 'en' ? n.english_label : n.korean_label;
-const period = () => $('#period').value;
-
-// DART 값은 부호/콤마 없는 정수 문자열로 온다. 숫자면 천단위 구분·우측 정렬, 음수는 (괄호) 빨간색.
-const isNum = v => /^-?\d+(\.\d+)?$/.test(v);
-const fmt = v => Number(v).toLocaleString('ko-KR');
 function esc(s) {
-  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c]);
 }
-function cell(v) {
-  if (v == null) return '<td></td>';
-  if (!isNum(v)) return `<td>${esc(v)}</td>`;
-  return +v < 0 ? `<td class="num neg">(${fmt(-v)})</td>` : `<td class="num">${fmt(v)}</td>`;
-}
+// 보고서 종류는 적재 때 붙인 --period 라벨에서 짐작한다 (viewer.html에도 같은 함수).
+const reportKind = p => /HY/.test(p) ? '반기보고서' : /Q1|1Q/.test(p) ? '1분기보고서' : /Q3|3Q/.test(p) ? '3분기보고서'
+  : /FY/.test(p) ? '사업보고서' : p;
+const ymd = d => d ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : '-';
+
+// period → 그 기간의 회사 목록. 회사 검색은 전 기간을 합친 목록에서 브라우저가 한다.
+const byPeriod = {};
+let companies = [], picked = null, selected = null;
 
 async function init() {
   const periods = await api('/periods');
-  $('#period').innerHTML = periods.map(p => `<option>${p}</option>`).join('');
-  $('#period').onchange = loadCompanies;
-  $('#lang').onchange = () => { drawToc(); if (current) current(); };
-  await loadCompanies();
-  loadStats();
+  $('#periodList').innerHTML = periods.map((p, i) =>
+    `<div class="check-row"><input type="checkbox" id="p${i}" value="${esc(p)}" checked><label for="p${i}">${esc(reportKind(p))} (${esc(p)})</label></div>`
+  ).join('') || '<div class="message-box">적재된 보고서가 없습니다.</div>';
+  await Promise.all(periods.map(async p => { byPeriod[p] = await api('/companies', { period: p }); }));
+  const seen = new Map();
+  Object.values(byPeriod).flat().forEach(c => seen.has(c.corp_code) || seen.set(c.corp_code, c));
+  companies = [...seen.values()];
+  api('/stats').then(s => {
+    $('#statCompanies').textContent = s.company_count.toLocaleString('ko-KR');
+    $('#statReports').textContent = s.report_count.toLocaleString('ko-KR');
+    $('#statUpdated').textContent = s.last_report_date || '—';
+  }).catch(() => {});
 }
 
-async function loadStats() {
-  const s = await api('/stats').catch(() => null);
-  if (!s) return;
-  $('#statCompanies').textContent = s.company_count.toLocaleString('ko-KR');
-  $('#statReports').textContent = s.report_count.toLocaleString('ko-KR');
-  $('#statUpdated').textContent = s.last_report_date || '—';
+/* ---- 회사 선택 팝업 ---- */
+function openCompanyModal() {
+  $('#companyModal').classList.remove('hidden');
+  $('#modalOverlay').classList.remove('hidden');
+  if (!$('#modalCompanyInput').value.trim()) $('#companyList').innerHTML = '<div class="message-box">회사명을 2글자 이상 입력하세요.</div>';
+  setTimeout(() => $('#modalCompanyInput').focus(), 50);
+}
+function closeCompanyModal() {
+  $('#companyModal').classList.add('hidden');
+  $('#modalOverlay').classList.add('hidden');
 }
 
-async function loadCompanies() {
-  $('#status').textContent = '회사 목록 불러오는 중…';
-  companies = await api('/companies', { period: period() });
-  $('#status').textContent = `${companies.length}개사`;
-}
-
-/* ---- 사업자 검색 팝업 ---- */
-function openSearch() {
-  $('#searchOverlay').classList.remove('hidden');
-  $('#modalInput').value = '';
-  $('#modalInput').focus();
-  renderResults('');
-}
-function closeSearch() { $('#searchOverlay').classList.add('hidden'); }
-
-function renderResults(q) {
-  const needle = q.trim().toLowerCase();
-  const hits = !needle ? companies
-    : companies.filter(c => [c.name, c.eng_name, c.corp_code, c.stock_code]
-        .some(s => s && s.toLowerCase().includes(needle)));
-  const box = $('#modalList');
-  if (!hits.length) {
-    box.innerHTML = '<div class="modal-empty">일치하는 회사가 없습니다.</div>';
-    return;
-  }
-  box.innerHTML = hits.slice(0, 300).map(c =>
-    `<div class="modal-row" data-code="${c.corp_code}">
-       <span>${esc(c.name)} <span class="code">${c.eng_name && c.eng_name !== c.name ? esc(c.eng_name) : ''}</span></span>
-       <span class="code">${c.stock_code ? c.stock_code + ' · ' : ''}${c.corp_code}</span></div>`).join('');
-  box.querySelectorAll('.modal-row').forEach(row => {
-    row.onclick = () => selectCompany(row.dataset.code);
-  });
-}
-
-$('#openSearch').onclick = openSearch;
-$('#closeSearch').onclick = closeSearch;
-$('#searchOverlay').onclick = e => { if (e.target.id === 'searchOverlay') closeSearch(); };
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSearch(); });
-$('#modalInput').oninput = e => renderResults(e.target.value);
-
-/* ---- 목차: KOX/DART 뷰어처럼 보고서 분석 · 연결/별도 × 본문/주석으로 묶는다 ---- */
-// 목차 코드 D + 6자리. D999xxx 보고서정보, D2~D7 본문, D8 주석. 끝자리 0 연결, 5 별도.
-const GROUPS = [['info', '보고서 분석'], ['b0', '연결재무제표 본문'], ['n0', '연결재무제표 주석'],
-                ['b5', '별도재무제표 본문'], ['n5', '별도재무제표 주석'], ['etc', '기타']];
-function groupOf(code) {
-  if (code.startsWith('D999')) return 'info';
-  const kind = code[1] === '8' ? 'n' : /[2-7]/.test(code[1]) ? 'b' : '';
-  const cs = code.slice(-1);
-  return kind && (cs === '0' || cs === '5') ? kind + cs : 'etc';
-}
-const splitName = s => (s.match(/^\[(\w+)\]\s*(.*)$/) || [, '', s]).slice(1);
-// 본문은 재무상태표 → 손익 → 포괄손익 → 자본변동표 → 현금흐름표, 주석은 주석 번호순.
-const orderKey = (g, r) => g[0] === 'b' ? '234657'.indexOf(r.code[1]) : parseInt(r.name) || 1e9;
-
-async function selectCompany(code) {
-  const hit = companies.find(c => c.corp_code === code);
-  if (!hit) return;
-  company = hit;
-  closeSearch();
-  $('#companyChip').textContent = `${hit.name} (${hit.corp_code})`;
-  roles = (await api('/roles', { cik: code, period: period() })).map(r => {
-    const [c, name] = splitName(r.ko);
-    return { ...r, code: c, name, nameEn: splitName(r.en || '')[1] || name, group: groupOf(c) };
-  });
-  $('#status').textContent = `${hit.name} · 목차 ${roles.length}건`;
-  drawToc();
-  if (roles.some(r => r.group === 'info')) showInfo();
-  else $('#pane').innerHTML = pageHead() + '<p class="placeholder">목차를 고르세요.</p>';
-}
-
-function drawToc() {
-  if (!company) return;
-  const toc = $('#toc');
-  toc.innerHTML = GROUPS.map(([g, title]) => {
-    const rs = roles.filter(r => r.group === g);
-    if (!rs.length) return '';
-    const items = g === 'info' ? '<div class="item" data-info="1">기초 정보</div>'
-      : rs.sort((a, b) => orderKey(g, a) - orderKey(g, b) || a.code.localeCompare(b.code))
-          .map(r => `<div class="item" data-id="${esc(r.id)}">${esc(lang() === 'en' ? r.nameEn : r.name)}</div>`).join('');
-    return `<details open><summary>${title}</summary>${items}</details>`;
-  }).join('') || '<p class="placeholder">목차가 없습니다.</p>';
-  toc.querySelectorAll('.item').forEach(el => el.onclick = () => {
-    toc.querySelectorAll('.item.sel').forEach(x => x.classList.remove('sel'));
-    el.classList.add('sel');
-    el.dataset.info ? showInfo() : showRole(roles.find(r => r.id === el.dataset.id));
-  });
-}
-
-// "삼성전자 2026-06-30 반기보고서". 보고서 종류는 적재 때 붙인 --period 라벨에서 짐작한다.
-function pageHead() {
-  const d = company.report_date || '', p = period();
-  const kind = /HY/.test(p) ? '반기보고서' : /Q1|1Q/.test(p) ? '1분기보고서' : /Q3|3Q/.test(p) ? '3분기보고서'
-    : /FY/.test(p) ? '사업보고서' : '';
-  return `<div class="crumb">홈 / ${esc(company.name)}</div>
-    <div class="page-title">${esc(company.name)} ${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)} ${kind}</div>`;
-}
-
-/* ---- 재무제표 본문 · 주석 ---- */
-async function showRole(r) {
-  current = () => showRole(r);
-  const pane = $('#pane');
-  const kind = r.group.endsWith('0') ? '<span class="kind">연결</span>'
-    : r.group.endsWith('5') ? '<span class="kind sep">별도</span>' : '';
-  pane.innerHTML = pageHead() + `<div class="role-header">${kind}<b>${r.code}</b>
-      <span>${esc(lang() === 'en' ? r.nameEn : r.name)}</span>
-      <button class="btn" id="structBtn" type="button">XBRL 구조 및 속성</button></div>
-    <div class="view"><p class="placeholder">표 만드는 중…</p></div>`;
-  const view = pane.querySelector('.view');
-  const q = { period: period(), lang: lang() };
-  try {
-    const [d, roots] = await Promise.all([
-      api(`/table/${company.corp_code}/${encodeURIComponent(r.id)}`, q),
-      api(`/tree/${company.corp_code}/${encodeURIComponent(r.id)}`, q).catch(() => []),
-    ]);
-    let struct = false;
-    const draw = () => {
-      $('#structBtn').textContent = struct ? '표 보기' : 'XBRL 구조 및 속성';
-      view.innerHTML = '';
-      if (struct) return view.appendChild(structTable(roots));
-      if (!d.tables.length) return view.innerHTML = '<p class="placeholder">이 목차에는 표로 만들 값이 없습니다.</p>';
-      const byId = {};
-      const index = (n, parent) => { n.parent = parent; byId[n.element_id] ??= n; n.children.forEach(c => index(c, n)); };
-      roots.forEach(x => index(x, null));
-      const axes = axisInfo(roots);
-      d.tables.map(foldInstants).forEach(t => view.appendChild(
-        isText(t) ? textBox(t)
-        : r.group[0] === 'b' && !varyingAxes(t.columns, axes).length ? stmtCard(t, d.units) : noteCard(t, byId, axes)));
+function filterCompanies(q) {
+  picked = null;
+  const needle = q.trim().toLowerCase(), box = $('#companyList');
+  if (needle.length < 2) return box.innerHTML = '<div class="message-box">2글자 이상 입력하세요.</div>';
+  const hits = companies.filter(c => [c.name, c.eng_name, c.corp_code, c.stock_code]
+    .some(s => s && s.toLowerCase().includes(needle))).slice(0, 50);
+  if (!hits.length) return box.innerHTML = '<div class="message-box">검색 결과 없음</div>';
+  box.innerHTML = hits.map(c => `<div class="company-item" data-code="${c.corp_code}">
+      <strong>${esc(c.name)}</strong>
+      <small>고유 번호: ${c.corp_code}${c.stock_code ? ' · 종목코드: ' + c.stock_code : ''}${c.eng_name && c.eng_name !== c.name ? ' · ' + esc(c.eng_name) : ''}</small></div>`).join('');
+  box.querySelectorAll('.company-item').forEach(el => {
+    el.onclick = () => {
+      box.querySelectorAll('.selected').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+      picked = companies.find(c => c.corp_code === el.dataset.code);
     };
-    $('#structBtn').onclick = () => { struct = !struct; draw(); };
-    draw();
-  } catch (e) { view.innerHTML = `<p class="placeholder">${esc(e)}</p>`; }
-}
-
-// 컨텍스트 ID 접두어 → 기간 이름. CFY2026eHYA = 당기(C) 2026 시점(e) 반기(HY) 누적(A).
-// P 전기 / BP 전전기, d 기간 / e 시점, HY 반기 · Q1·Q3 분기 · FY 연간, 끝의 A 누적 / Q 3개월.
-// 끝 글자가 없으면 그 회계연도 전체(전기말 = 전기 12월 말).
-function periodName(ctx) {
-  const m = ctx.split('_')[0].match(/^(BP|C|P)FY\d{4}([de])([A-Z0-9]*?)([AQ]?)$/);
-  if (!m) return '';
-  const [, who, kind, type, part] = m;
-  const w = { C: '당', P: '전', BP: '전전' }[who];
-  const unit = !part || type === 'FY' ? '기' : type === 'HY' ? '반기' : '분기';
-  if (kind === 'e') return w + unit + '말';
-  return w + unit + (!part || type === 'FY' ? '' : part === 'Q' ? ' 3개월' : ' 누적');
-}
-
-// 기간(duration) 열이 있는 표에서 시점(instant) 값(기초·기말 잔액)을 기간 열로 옮긴다.
-// 기초 라벨(periodStartLabel)이면 시작 전날, 아니면 종료일 시점 값. XBRL 렌더링 관례.
-function foldInstants(t) {
-  const dates = c => c.period.split(' ~ ');
-  const dur = t.columns.filter(c => dates(c).length === 2);
-  if (!dur.length) return t;
-  const rest = id => id.slice(id.split('_')[0].length);
-  const inst = new Map(t.columns.filter(c => dates(c).length === 1).map(c => [rest(c.contextId) + '|' + c.period, c.contextId]));
-  const dayBefore = s => new Date(Date.parse(s) - 864e5).toISOString().slice(0, 10);
-  const rows = t.rows.map(r => {
-    const cells = { ...r.cells };
-    let moved = false;
-    dur.forEach(c => {
-      const [s, e] = dates(c);
-      const ic = inst.get(rest(c.contextId) + '|' + (/periodStart/.test(r.labelRole) ? dayBefore(s) : e));
-      if (ic && cells[ic] != null && cells[c.contextId] == null) { cells[c.contextId] = cells[ic]; moved = true; }
-    });
-    // 기초/기말 행은 라벨 역할이 뜻을 정한다. 옮긴 행에 남은 다른 시점 값은 다른 행(기말/기초) 몫이다.
-    if (moved) inst.forEach(ic => delete cells[ic]);
-    return { ...r, cells };
+    el.ondblclick = confirmCompany;
   });
-  return { ...t, rows, columns: t.columns.filter(c => rows.some(r => r.cells[c.contextId] != null)) };
 }
 
-// [항목] 밖에서 문장 값만 있는 상자 = KOX의 주석 문장(각주) 상자. 표가 아니라 제목 + 본문으로 보여준다.
-function isText(t) {
-  return !t.elementId && t.rows.every(r => Object.values(r.cells).every(v => !isNum(v)));
-}
-function textBox(t) {
-  const el = document.createElement('div');
-  el.innerHTML = t.rows.filter(r => Object.keys(r.cells).length).map(r =>
-    `<h3 class="outline-h">${esc(r.label)}</h3><p class="fn">${[...new Set(Object.values(r.cells))].map(esc).join('<br>')}</p>`).join('');
-  return el;
+function confirmCompany() {
+  if (!picked) return alert('회사를 선택해주세요.');
+  selected = picked;
+  $('#selectedCompanyDisplay').textContent = `${selected.name} (${selected.stock_code || selected.corp_code})`;
+  closeCompanyModal();
 }
 
-// 열마다 멤버가 다른 축. 모든 열이 같은 멤버(연결/별도 등)인 축은 머리글에 올릴 필요가 없다.
-function varyingAxes(cols, axes) {
-  const order = [...axes.keys()];
-  const memberOf = (c, a) => c.dims.find(dm => dm.axis === a)?.member ?? null;
-  return [...new Set(cols.flatMap(c => c.dims.map(dm => dm.axis)))]
-    .filter(a => new Set(cols.map(c => memberOf(c, a))).size > 1)
-    .sort((a, b) => (order.indexOf(a) + 1 || 1e9) - (order.indexOf(b) + 1 || 1e9));
+/* ---- 검색: 선택한 기간들 중 그 회사가 제출한 보고서 ---- */
+function handleSearch() {
+  if (!selected) return alert('회사를 선택해주세요.');
+  const periods = [...document.querySelectorAll('#periodList input:checked')].map(i => i.value);
+  if (!periods.length) return alert('보고서를 하나 이상 선택해주세요.');
+  const reports = periods.flatMap(p => (byPeriod[p] || []).filter(c => c.corp_code === selected.corp_code).map(c => ({ ...c, period: p })));
+  $('#emptyState').classList.add('hidden');
+  $('#resultArea').classList.remove('hidden');
+  $('#resultCount').textContent = `${reports.length}건`;
+  $('#reportList').innerHTML = !reports.length ? '<div class="message-box">검색 결과 없음</div>' : `
+    <table class="xbrl-table"><thead><tr>
+      <th style="width:23%">회사명</th><th style="width:25%">보고서 유형</th><th style="width:15%">기준일</th>
+      <th style="width:12%">종목코드</th><th style="width:12%">고유번호</th><th style="width:13%">작업</th></tr></thead>
+    <tbody>${reports.map(r => `<tr>
+      <td>${esc(r.name)}</td><td>${esc(reportKind(r.period))} <span class="mono">(${esc(r.period)})</span></td>
+      <td>${ymd(r.report_date)}</td><td class="mono">${r.stock_code || '-'}</td><td class="mono">${r.corp_code}</td>
+      <td><a class="view-btn" style="text-decoration:none" target="_blank" rel="noopener"
+             href="/viewer.html?${new URLSearchParams({ cik: r.corp_code, period: r.period })}">XBRL 보기</a></td></tr>`).join('')}
+    </tbody></table>`;
 }
 
-// 본문: 행 = 계정(들여쓰기), 열 = 기간. 첫 행 [개요]는 제목으로 올린다.
-function stmtCard(t, units) {
-  let rows = t.rows, title = t.title;
-  if (rows[0]?.abstract && rows[0].depth === 0) { title = rows[0].label; rows = rows.slice(1); }
-  const base = Math.min(...rows.map(r => r.depth));
-  // ponytail: 다른 표(자본변동표 등)와 요소를 같이 써서 몇 칸만 찬 비교 열(전반기말 등)은 뺀다.
-  // 채운 행이 가장 많은 열의 1/3 미만이면 버림. 틀리면 D999007 재무제표정보로 열을 정하는 쪽으로.
-  const n = c => rows.filter(r => r.cells[c.contextId] != null).length;
-  const max = Math.max(...t.columns.map(n));
-  const cols = t.columns.filter(c => n(c) * 3 >= max);
-  const unit = units.map(u => ({ KRW: '원', USD: '달러', SHARES: '주', KRWEPS: '원/주', PURE: '' })[u] ?? u)
-    .filter(Boolean).join(', ');
-  const card = document.createElement('div');
-  card.innerHTML = `<h3 class="outline-h">${esc(title)}</h3><span class="unit">(단위: ${unit || '—'})</span>
-    <div class="scroll"><table class="st"><thead><tr><th></th>${cols.map(c =>
-      `<th>${periodName(c.contextId) || c.period}<div class="tag">${c.period}</div></th>`).join('')}</tr></thead>
-    <tbody>${rows.map(r => `<tr class="${r.abstract ? 'abs' : ''}"><td class="lbl" style="padding-left:${10 + (r.depth - base) * 18}px">${esc(r.label)}</td>${
-      cols.map(c => r.abstract ? '<td></td>' : cell(r.cells[c.contextId])).join('')}</tr>`).join('')}</tbody></table></div>`;
-  return card;
-}
+$('#companySelectBtn').onclick = openCompanyModal;
+$('#companySelectBtn').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCompanyModal(); } };
+$('#modalCloseBtn').onclick = closeCompanyModal;
+$('#modalOverlay').onclick = closeCompanyModal;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCompanyModal(); });
+$('#modalCompanyInput').oninput = e => filterCompanies(e.target.value);
+$('#modalCompanyInput').onkeydown = e => { if (e.key === 'Enter') confirmCompany(); };
+$('#modalConfirmBtn').onclick = confirmCompany;
+$('#searchBtn').onclick = handleSearch;
+$('#resetBtn').onclick = () => location.reload();
 
-// 표시 트리의 축마다 그 아래 멤버 경로(축 첫 자식부터)와 트리 순서를 모은다.
-function axisInfo(roots) {
-  const axes = new Map();
-  let ord = 0;
-  const walk = n => {
-    if (!n.element_id.endsWith('Axis')) return n.children.forEach(walk);
-    const a = axes.get(n.element_id) ??
-      { label: L(n), total: n.children[0] ? L(n.children[0]) : '', members: new Map() };
-    axes.set(n.element_id, a);
-    const sub = (m, path) => {
-      const p = [...path, L(m)];
-      if (!a.members.has(m.element_id)) a.members.set(m.element_id, { path: p, ord: ord++ });
-      m.children.forEach(c => sub(c, p));
-    };
-    n.children.forEach(c => sub(c, []));
-  };
-  roots.forEach(walk);
-  return axes;
-}
-
-// 주석(또는 축이 있는 본문): [항목]마다 카드 하나, 기간마다 표 하나. 열 머리글은 축 → 멤버 경로.
-function noteCard(t, byId, axes) {
-  const cols = t.columns;
-  const memberOf = (c, a) => c.dims.find(dm => dm.axis === a)?.member ?? null;
-  const varying = varyingAxes(cols, axes);
-
-  // 열마다 머리글 경로(축 → 상위 멤버 → 멤버)와 정렬 키. 축이 없는 컨텍스트는 그 축의 [합계].
-  const keyed = cols.map(c => {
-    const pk = c.contextId.split('_')[0], path = [], ord = [];
-    varying.forEach(a => {
-      const info = axes.get(a), m = memberOf(c, a), hit = m && info?.members.get(m);
-      path.push(info?.label ?? a.split('_').pop());
-      if (hit) { path.push(...hit.path); ord.push(hit.ord); }
-      else if (m) { path.push(c.members[c.dims.findIndex(dm => dm.axis === a)]); ord.push(1e9 - 1); }
-      else { path.push(`${info?.total ?? ''} [합계]`.trim()); ord.push(1e9); }
-    });
-    if (!path.length) path.push(periodName(pk) || c.period);
-    return { c, pk, path, ord };
-  });
-  const byOrd = (a, b) => { for (let i = 0; i < a.ord.length; i++) if (a.ord[i] !== b.ord[i]) return a.ord[i] - b.ord[i]; return 0; };
-  const pks = [...new Set(keyed.map(k => k.pk))];
-  const date = pk => keyed.find(k => k.pk === pk).c.period;
-  const pname = pk => periodName(pk) || date(pk);
-
-  // [항목] 위의 [개요]와 그 아래 [표]·[축]·[항목]을 요약 상자로 보여준다.
-  const group = byId[t.elementId]?.parent;
-  let html = '';
-  if (group) {
-    const lines = group.children.flatMap(n =>
-      n.element_id.endsWith('Table')
-        ? [[0, L(n)], ...n.children.filter(x => x.element_id.endsWith('Axis')).map(x => [1, L(x)])]
-        : n.element_id.endsWith('LineItems') ? [[1, L(n)]] : []);
-    // KOX처럼 [개요] 위에 그 표를 담는 [문장영역] 제목도 보여준다.
-    const text = group.parent && /Explanatory|TextBlock/.test(group.parent.element_id) ? group.parent : null;
-    if (text) html += `<h3 class="outline-h">${esc(L(text))}</h3>`;
-    html += `<h3 class="outline-h">${esc(L(group))}</h3>
-             <div class="outline">${lines.map(([l, s]) => `<div class="l${l}">${esc(s)}</div>`).join('')}</div>`;
-  } else if (t.title) {
-    html += `<h3 class="outline-h">${esc(t.title)}</h3>`;
-  }
-  html += `<details class="psel"><summary></summary><div class="opts">${pks.map(pk =>
-    `<label><input type="checkbox" value="${pk}" checked> ${pname(pk)} <span class="tag">${date(pk)}</span></label>`
-  ).join('')}</div></details><div class="tables"></div>`;
-
-  const card = document.createElement('div');
-  card.className = 'note';
-  card.innerHTML = html;
-  const render = () => {
-    const on = [...card.querySelectorAll('.psel input:checked')].map(i => i.value);
-    card.querySelector('.psel summary').textContent = on.map(pname).join(', ') || '기간 선택';
-    card.querySelector('.tables').innerHTML = on.map(pk =>
-      `<p class="plabel">(기간: ${pname(pk)} · ${date(pk)})</p>` +
-      gridTable(t, keyed.filter(k => k.pk === pk).sort(byOrd))).join('');
-  };
-  card.querySelector('.psel').onchange = render;
-  render();
-  return card;
-}
-
-// 행·열 머리글을 병합 셀로 그린다. 행 머리글은 [항목] 제목 → 상위 행 → 자기 자신 순이고,
-// 값이 있는 상위 행은 자기 줄을 따로 갖는다(DART 뷰어와 같은 모양).
-function gridTable(t, ks) {
-  const cols = ks.map(k => k.c);
-  const stack = [], rows = [];
-  t.rows.forEach((r, i) => {
-    stack.length = r.depth;
-    const ids = [...stack, i];
-    stack.push(i);
-    if (!r.abstract && cols.some(c => r.cells[c.contextId] != null)) rows.push(t.title ? ['T', ...ids] : ids);
-  });
-  if (!rows.length) return '<p class="placeholder">이 기간에는 값이 없습니다.</p>';
-  const lab = id => esc(id === 'T' ? t.title : t.rows[id].label);
-  const nLab = Math.max(...rows.map(p => p.length));
-
-  const paths = ks.map(k => k.path), L = Math.max(...paths.map(p => p.length));
-  const key = (p, i) => p.slice(0, i + 1).join('\u0001');
-  const same = (a, b, i) => a && b && a.length > i && b.length > i && key(a, i) === key(b, i)
-    && (a.length - 1 === i) === (b.length - 1 === i);
-  let head = '';
-  for (let i = 0; i < L; i++) {
-    head += '<tr>' + (i ? '' : `<th class="corner" colspan="${nLab}" rowspan="${L}"></th>`);
-    paths.forEach((p, j) => {
-      if (p.length <= i || same(paths[j - 1], p, i)) return;
-      let span = 1;
-      while (same(paths[j + span], p, i)) span++;
-      head += `<th colspan="${span}" rowspan="${i === p.length - 1 ? L - i : 1}">${esc(p[i])}</th>`;
-    });
-    head += '</tr>';
-  }
-
-  const body = rows.map((p, k) => {
-    const cont = (q, i) => q && q.length - 1 > i && q[i] === p[i];
-    let th = '';
-    p.forEach((id, i) => {
-      if (i === p.length - 1) { th += `<th class="rh" colspan="${nLab - i}">${lab(id)}</th>`; return; }
-      if (cont(rows[k - 1], i)) return;
-      let span = 1;
-      while (cont(rows[k + span], i)) span++;
-      th += `<th class="rh" rowspan="${span}">${lab(id)}</th>`;
-    });
-    const r = t.rows[p[p.length - 1]];
-    return `<tr>${th}${cols.map(c => cell(r.cells[c.contextId])).join('')}</tr>`;
-  }).join('');
-  return `<div class="scroll"><table class="xt"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
-}
-
-// XBRL 구조 및 속성: 표시 트리를 한 줄에 요소 하나로 펼친다.
-function structTable(roots) {
-  const rows = [];
-  const walk = (n, d) => { rows.push([n, d]); n.children.forEach(c => walk(c, d + 1)); };
-  roots.forEach(r => walk(r, 0));
-  const el = document.createElement('div');
-  el.className = 'scroll';
-  el.innerHTML = `<table class="struct"><thead><tr>${['표시 한글명', 'Prefix', '표시 영어명', 'ID', '기본 한글명',
-    '기본 영어명', '라벨 역할', '데이터 타입', '기간 유형', '차/대'].map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${
-    rows.map(([n, d]) => `<tr class="${n.abstract ? 'abs' : ''}">${[
-      `<span style="padding-left:${d * 14}px">${d ? '↳ ' : ''}${esc(n.korean_label)}</span>`,
-      esc(n.element_id.split('_')[0]), esc(n.english_label), esc(n.element_id), esc(n.korean_std), esc(n.english_std),
-      esc(n.label_role), esc((n.data_type || '').split(':').pop()), n.period_type || '', n.balance || '',
-    ].map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-  return el;
-}
-
-/* ---- 기초 정보 (D999xxx 보고서정보 목차를 한 페이지에) ---- */
-// KOX 뷰어 순서: 기업 → 주소 → 문서 → 작성자 → 기간 → 감사, 그 뒤 재무제표 정보.
-const INFO_ORDER = ['D999004', 'D999005', 'D999001', 'D999006', 'D999002', 'D999003', 'D999007'];
-async function showInfo() {
-  current = showInfo;
-  $('#toc').querySelector('[data-info]')?.classList.add('sel');
-  const pane = $('#pane');
-  pane.innerHTML = pageHead() + '<p class="placeholder">불러오는 중…</p>';
-  const rs = roles.filter(r => r.group === 'info')
-    .sort((a, b) => (INFO_ORDER.indexOf(a.code) + 1 || 99) - (INFO_ORDER.indexOf(b.code) + 1 || 99));
-  const ds = await Promise.all(rs.map(r => api(`/table/${company.corp_code}/${encodeURIComponent(r.id)}`,
-    { period: period(), lang: lang() }).catch(() => ({ tables: [] }))));
-  const en = lang() === 'en';
-  const title = r => en ? r.nameEn : r.name.split(' - ').pop();
-  // 라벨이 "공시대상,법인명" 꼴이다. 쉼표 앞은 표 이름이라 뗀다.
-  const label = s => s.replace(/^[^,]*,\s*/, '');
-  const val = v => v == null ? '' : !en && v === 'true' ? '예' : !en && v === 'false' ? '아니오' : esc(v);
-  const member = s => esc(s.replace(/\s*\[(member|구성요소)\]$/, ''));
-  const section = (r, d) => `<section id="info-${r.code}"><h3>${esc(title(r))}</h3>${d.tables.map(t => {
-    const rows = t.rows.filter(x => !x.abstract && t.columns.some(c => x.cells[c.contextId] != null));
-    if (t.columns.length === 1) {
-      const c = t.columns[0].contextId;
-      return `<dl class="kv">${rows.map(x => `<dt>${esc(label(x.label))}</dt><dd>${val(x.cells[c])}</dd>`).join('')}</dl>`;
-    }
-    return `<div class="scroll"><table class="xt"><thead><tr><th></th>${t.columns.map(c =>
-      `<th>${member(c.members.at(-1) ?? c.period)}</th>`).join('')}</tr></thead><tbody>${rows.map(x =>
-      `<tr><th class="rh">${esc(label(x.label))}</th>${t.columns.map(c => `<td>${val(x.cells[c.contextId])}</td>`).join('')}</tr>`
-    ).join('')}</tbody></table></div>`;
-  }).join('')}</section>`;
-  pane.innerHTML = pageHead() + `<div class="info"><nav>${rs.map(r =>
-    `<a href="#info-${r.code}">${esc(title(r))}</a>`).join('')}</nav>
-    <div class="body">${rs.map((r, i) => section(r, ds[i])).join('')}</div></div>`;
-}
-
-init();
+init().catch(e => $('#periodList').innerHTML = `<div class="error-box">불러오기 오류: ${esc(e)}</div>`);
 </script>
 </body>
 </html>

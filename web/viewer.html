@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XBRL Viewer</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Pretendard", "Apple SD Gothic Neo", Arial, sans-serif; background: #f6f7f9; color: #1f2933; }
+  .hidden { display: none !important; }
+
+  .viewer-brand-bar { height: 50px; background: #fff; border-bottom: 1px solid #dfe3e8; display: flex; align-items: center; padding: 0 18px; }
+  .viewer-brand-link { display: inline-flex; align-items: center; gap: 9px; color: #1f2933; font-weight: 900; text-decoration: none; }
+  .viewer-brand-link img { height: 20px; max-width: 120px; object-fit: contain; }
+  .viewer-brand-mark { width: 20px; height: 20px; background: #f5c400; border-radius: 4px; display: inline-block; }
+
+  .layout { display: flex; height: calc(100vh - 50px); }
+  .sidebar { width: 340px; min-width: 220px; background: #fff; border-right: 1px solid #dfe3e8; overflow-y: auto; resize: horizontal; }
+  .toc-title { padding: 12px 16px; font-size: 15px; font-weight: 900; border-bottom: 1px solid #dfe3e8; background: #fffbed; display: flex; justify-content: space-between; align-items: center; }
+  .toc-title select { font: inherit; font-size: 12px; font-weight: 400; padding: 3px 6px; border: 1px solid #dfe3e8; border-radius: 4px; background: #fff; }
+  .toc-section { padding: 14px 16px 8px; font-size: 13px; font-weight: 900; border-top: 1px solid #edf0f3; background: #f9fafb; }
+  .toc-item { padding: 9px 16px 9px 22px; font-size: 12px; color: #3f4854; cursor: pointer; line-height: 1.35; border-bottom: 1px solid #f1f3f5; }
+  .toc-item:hover, .toc-item.active { background: #fff7d6; color: #1f2933; font-weight: 800; }
+  .toc-item .muted { font-weight: 400; }
+
+  .main { flex: 1; min-width: 0; overflow: auto; }  /* min-width:0 이 없으면 넓은 표가 화면을 키워 표마다 가로 스크롤이 안 생긴다 */
+  .top-header { background: #fff; border-bottom: 1px solid #dfe3e8; padding: 16px 22px; position: sticky; top: 0; z-index: 10; }
+  .breadcrumb { font-size: 13px; color: #606a76; margin-bottom: 10px; }
+  .breadcrumb a { color: #2563eb; font-weight: 700; text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+  .title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .title-row h1 { margin: 0; font-size: 24px; font-weight: 900; }
+  .pill { display: inline-flex; align-items: center; padding: 7px 11px; border-radius: 999px; font-size: 12px; font-weight: 800; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; white-space: nowrap; }
+  .content { padding: 20px 24px 40px; }
+  .panel { background: #fff; border: 1px solid #dfe3e8; margin-bottom: 18px; }
+  .panel-header { padding: 13px 16px; background: #f9fafb; border-bottom: 1px solid #dfe3e8; font-size: 15px; font-weight: 900; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .panel-body { padding: 16px; }
+  .panel-btn { font: inherit; font-size: 12px; font-weight: 700; border: 1px solid #d6e4ff; background: #fff; color: #2563eb; border-radius: 999px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+  .panel-actions { display: inline-flex; align-items: center; gap: 8px; }
+  .panel-toggle { display: inline-flex; align-items: center; gap: 6px; }
+  .panel-toggle input { margin: 0; accent-color: #2563eb; cursor: pointer; }
+  .panel-toggle:has(input:checked) { background: #eff6ff; border-color: #93c5fd; }
+  .panel-btn:hover { background: #eff6ff; border-color: #93c5fd; }
+  .info-grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .info-grid th { width: 220px; text-align: left; background: #f9fafb; border: 1px solid #dfe3e8; padding: 10px; position: static; font-weight: 800; }
+  .info-grid td { border: 1px solid #dfe3e8; padding: 10px; }
+  .info-sub { margin: 18px 0 8px; font-size: 14px; font-weight: 900; }
+  .muted { color: #606a76; }
+  .mono { font-family: Consolas, monospace; }
+  .loading { text-align: center; padding: 60px; color: #606a76; background: #fff; border: 1px solid #dfe3e8; }
+  .error-box { background: #fff1f2; border: 1px solid #fecdd3; color: #9f1239; padding: 16px; border-radius: 6px; line-height: 1.6; white-space: pre-wrap; }
+
+  .role-doc-title { margin: 0 0 12px; font-size: 18px; font-weight: 900; }
+  .role-doc-meta { margin-bottom: 14px; color: #606a76; font-size: 12px; line-height: 1.5; }
+  .text-section { margin: 10px 0 18px; padding: 12px 14px; border: 1px solid #e5e9ef; background: #fff; line-height: 1.7; font-size: 13px; }
+  .text-section-title { font-weight: 900; margin-bottom: 8px; }
+  .text-section p { margin: 0; white-space: pre-wrap; }
+  .table-section-title { margin: 18px 0 8px; font-size: 14px; font-weight: 900; }
+  .unit { font-size: 12px; color: #606a76; font-weight: 400; margin-left: 8px; }
+  .period-title { font-size: 13px; font-weight: 900; margin: 14px 0 8px; }
+  .table-wrap { overflow: auto; max-height: 760px; border: 1px solid #dfe3e8; margin-bottom: 22px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th { background: #dfe5ec; border: 1px solid #c8d0da; padding: 8px 10px; text-align: center; font-weight: 900; position: sticky; top: 0; z-index: 2;
+       min-width: 160px; word-break: keep-all; line-height: 1.4; }
+  td { border: 1px solid #d6dde6; padding: 8px 10px; background: #fff; vertical-align: middle; min-width: 140px; word-break: keep-all; }
+  tbody tr:hover td { background: #fffbed; }
+  .row-label { background: #edf1f5; font-weight: 800; min-width: 180px; }
+  tr.abs .row-label { font-weight: 900; }
+  .row-group-cell { min-width: 200px; max-width: 320px; }
+  .num { text-align: right; font-family: Consolas, monospace; white-space: nowrap; }
+  .neg { color: #c0392b; }
+  .text-cell { text-align: left; line-height: 1.45; min-width: 240px; }
+  .kox-left-corner { background: #dfe5ec; min-width: 360px; }
+  .tag { display: block; color: #606a76; font-size: 11px; font-weight: 400; }
+
+  .note-table-block { margin: 16px 0 26px; padding: 16px; background: #fff; border: 1px solid #dfe3e8; border-radius: 8px; }
+  .note-overview { margin: 0 0 18px; padding: 14px 18px; border: 1px solid #edf0f3; border-radius: 6px; background: #fbfcfd; }
+  .note-overview-heading { font-weight: 900; font-size: 13px; margin: 0 0 10px; }
+  .note-overview-heading + .note-context-level { margin-top: 4px; }
+  .note-context-level { font-size: 12px; padding: 5px 0 5px 10px; color: #374151; line-height: 1.5; }
+  .note-context-level.l1 { padding-left: 26px; }
+  details.psel { position: relative; display: inline-block; margin: 4px 0; }
+  details.psel summary { list-style: none; cursor: pointer; min-width: 280px; padding: 7px 12px; font-size: 13px; background: #f9fafb; border: 1px solid #dfe3e8; border-radius: 4px; }
+  details.psel summary::after { content: "⌄"; float: right; margin-left: 12px; }
+  details.psel .opts { position: absolute; z-index: 5; background: #fff; border: 1px solid #dfe3e8; box-shadow: 0 6px 18px rgba(0,0,0,.12); padding: 6px 12px; min-width: 100%; }
+  details.psel label { display: block; padding: 4px 0; font-size: 13px; white-space: nowrap; cursor: pointer; }
+  details.psel .tag { display: inline; }
+
+  /* XBRL 구조 및 속성 */
+  table.struct th { text-align: left; }
+  table.struct td { white-space: nowrap; }
+  table.struct td:first-child { background: #edf5ff; }
+
+  /* 속성 패널 */
+  .xbrl-prop-clickable { cursor: pointer; }
+  .xbrl-prop-clickable:hover { outline: 2px solid #2563eb; outline-offset: -2px; background: #eff6ff !important; }
+  .property-panel { position: fixed; top: 0; right: 0; width: 360px; max-width: 100vw; height: 100vh; background: #fff; border-left: 1px solid #dfe3e8; box-shadow: -6px 0 18px rgba(0,0,0,.12);
+                    z-index: 1000; transform: translateX(100%); transition: transform .18s ease; overflow-y: auto; }
+  .property-panel.open { transform: translateX(0); }
+  .property-header { height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid #dfe3e8; font-weight: 900; }
+  .property-close { border: none; background: transparent; font-size: 20px; cursor: pointer; color: #606a76; }
+  .property-body { padding: 14px 18px 28px; font-size: 12px; color: #374151; }
+  .property-help { color: #606a76; line-height: 1.6; padding-bottom: 12px; border-bottom: 1px solid #dfe3e8; margin-bottom: 12px; }
+  .property-row { padding: 10px 0; border-bottom: 1px solid #dfe3e8; }
+  .property-row strong { display: block; color: #606a76; margin-bottom: 6px; }
+  .property-row span { display: block; color: #1f2933; word-break: break-all; line-height: 1.45; }
+</style>
+</head>
+<body>
+<header class="viewer-brand-bar">
+  <a class="viewer-brand-link" href="/" title="홈으로 이동">
+    <img src="/static/image1.png" alt="" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
+    <span class="viewer-brand-mark" style="display:none;"></span>
+    <span>XBRL Viewer</span>
+  </a>
+</header>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="toc-title"><span>목차</span>
+      <select id="lang" aria-label="라벨 언어"><option value="ko">표시 한글명</option><option value="en">표시 영어명</option></select></div>
+    <div id="dynamicMenu"><div class="toc-section">보고서 분석</div><div class="toc-item active" data-info="1">기초 정보</div></div>
+  </aside>
+  <main class="main">
+    <div class="top-header">
+      <div class="breadcrumb" id="breadcrumb"><a href="/">홈</a></div>
+      <div class="title-row"><h1 id="pageTitle">XBRL Viewer</h1><span class="pill" id="pill"></span></div>
+    </div>
+    <div class="content">
+      <div id="loading" class="loading">XBRL 데이터를 불러오는 중입니다...</div>
+      <section id="basic" class="panel hidden">
+        <div class="panel-header">기초 정보</div>
+        <div class="panel-body" id="basicBody"></div>
+      </section>
+      <section id="roleDocumentSection" class="panel hidden">
+        <div class="panel-header"><span id="roleDocumentTitle">재무제표</span>
+          <span class="panel-actions"><label class="panel-btn panel-toggle"><input type="checkbox" id="emptyCols" checked> 빈 열 표시</label>
+          <button class="panel-btn" id="structBtn" type="button">XBRL 구조 및 속성</button></span></div>
+        <div class="panel-body" id="roleDocumentBody"></div>
+      </section>
+    </div>
+  </main>
+</div>
+<div id="propertyPanel" class="property-panel" aria-label="속성">
+  <div class="property-header"><span>속성</span><button id="propertyCloseBtn" class="property-close" type="button" aria-label="닫기">×</button></div>
+  <div id="propertyBody" class="property-body"><div class="property-help">요소명을 클릭해 속성을 확인해 보세요.</div></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = (p, q) => fetch(`/api${p}?` + new URLSearchParams(q)).then(r =>
+  r.ok ? r.json() : r.json().then(e => Promise.reject(e.detail || r.statusText)));
+
+const params = new URLSearchParams(location.search);
+const cik = params.get('cik') || '', period = () => params.get('period') || '';
+let company = null, roles = [], current = null, byId = {};
+const lang = () => $('#lang').value;
+const L = n => lang() === 'en' ? n.english_label : n.korean_label;
+// 축·멤버 머리글은 표준 라벨("… [구성요소]"). 행·개요는 회사가 고른 표시 라벨(L).
+const S = n => (lang() === 'en' ? n.english_std : n.korean_std) || L(n);
+
+// DART 값은 부호/콤마 없는 정수 문자열로 온다. 숫자면 천단위 구분·우측 정렬, 음수는 (괄호) 빨간색.
+const isNum = v => /^-?\d+(\.\d+)?$/.test(v);
+const fmt = v => Number(v).toLocaleString('ko-KR');
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+}
+function cell(v) {
+  if (v == null) return '<td></td>';
+  if (!isNum(v)) return `<td class="text-cell">${esc(v)}</td>`;
+  return +v < 0 ? `<td class="num neg">(${fmt(-v)})</td>` : `<td class="num">${fmt(v)}</td>`;
+}
+// 클릭하면 속성 패널에 그 요소 속성을 띄운다(아래 click 위임 핸들러).
+const prop = eid => eid ? ` data-eid="${esc(eid)}"` : '';
+const reportKind = p => /HY/.test(p) ? '반기보고서' : /Q1|1Q/.test(p) ? '1분기보고서' : /Q3|3Q/.test(p) ? '3분기보고서'
+  : /FY/.test(p) ? '사업보고서' : p;
+const ymd = d => d ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : '-';
+
+async function init() {
+  if (!cik || !period()) throw '회사(cik)와 보고서(period)가 주소에 없습니다. 홈에서 보고서를 다시 골라 주세요.';
+  const [cs, rs] = await Promise.all([api('/companies', { period: period() }), api('/roles', { cik, period: period() })]);
+  company = cs.find(c => c.corp_code === cik);
+  if (!company) throw `${period()} 보고서에 고유번호 ${cik} 회사가 없습니다.`;
+  roles = rs.map(r => {
+    const [c, name] = splitName(r.ko);
+    return { ...r, code: c, name, nameEn: splitName(r.en || '')[1] || name, group: groupOf(c) };
+  });
+  const title = `${company.name} ${ymd(company.report_date)} ${reportKind(period())}`;
+  document.title = `${company.name} - XBRL Viewer`;
+  $('#breadcrumb').innerHTML = `<a href="/">홈</a> / ${esc(company.name)}`;
+  $('#pageTitle').textContent = title;
+  $('#lang').onchange = () => { drawToc(); current?.(); };
+  $('#loading').classList.add('hidden');
+  drawToc();
+  showInfo();
+}
+
+/* ---- 목차: KOX/DART 뷰어처럼 보고서 분석 · 연결/별도 × 본문/주석으로 묶는다 ---- */
+// 목차 코드 D + 6자리. D999xxx 보고서정보, D2~D7 본문, D8 주석. 끝자리 0 연결, 5 별도.
+const GROUPS = [['b0', '연결재무제표 본문'], ['n0', '연결재무제표 주석'],
+                ['b5', '별도재무제표 본문'], ['n5', '별도재무제표 주석'], ['etc', '기타']];
+function groupOf(code) {
+  if (code.startsWith('D999')) return 'info';
+  const kind = code[1] === '8' ? 'n' : /[2-7]/.test(code[1]) ? 'b' : '';
+  const cs = code.slice(-1);
+  return kind && (cs === '0' || cs === '5') ? kind + cs : 'etc';
+}
+const splitName = s => (s.match(/^\[(\w+)\]\s*(.*)$/) || [, '', s]).slice(1);
+// 본문은 재무상태표 → 손익 → 포괄손익 → 자본변동표 → 현금흐름표, 주석은 주석 번호순.
+const orderKey = (g, r) => g[0] === 'b' ? '234657'.indexOf(r.code[1]) : parseInt(r.name) || 1e9;
+
+function drawToc() {
+  const sel = $('#dynamicMenu .toc-item.active');
+  const was = sel && (sel.dataset.info || sel.dataset.id);
+  const menu = $('#dynamicMenu');
+  menu.innerHTML = '<div class="toc-section">보고서 분석</div><div class="toc-item" data-info="1">기초 정보</div>' +
+    GROUPS.map(([g, title]) => {
+      const rs = roles.filter(r => r.group === g);
+      if (!rs.length) return '';
+      return `<div class="toc-section">${title}</div>` + rs
+        .sort((a, b) => orderKey(g, a) - orderKey(g, b) || a.code.localeCompare(b.code))
+        .map(r => `<div class="toc-item" data-id="${esc(r.id)}">${esc(lang() === 'en' ? r.nameEn : r.name)}</div>`).join('');
+    }).join('');
+  menu.querySelectorAll('.toc-item').forEach(el => {
+    if (was && (el.dataset.info || el.dataset.id) === was) el.classList.add('active');
+    el.onclick = () => el.dataset.info ? showInfo() : showRole(roles.find(r => r.id === el.dataset.id));
+  });
+}
+
+function activate(sel) {
+  document.querySelectorAll('.toc-item').forEach(el => el.classList.toggle('active', el.matches(sel)));
+  ['basic', 'roleDocumentSection'].forEach(id => $('#' + id).classList.add('hidden'));
+  $('.main').scrollTop = 0;
+}
+
+/* ---- 재무제표 본문 · 주석 ---- */
+async function showRole(r) {
+  const me = current = () => showRole(r);
+  activate(`[data-id="${CSS.escape(r.id)}"]`);
+  $('#roleDocumentSection').classList.remove('hidden');
+  const name = lang() === 'en' ? r.nameEn : r.name;
+  const scope = r.group.endsWith('0') ? '연결' : r.group.endsWith('5') ? '별도' : '';
+  $('#pill').textContent = scope;
+  $('#pill').classList.toggle('hidden', !scope);
+  $('#roleDocumentTitle').textContent = `[${r.code}] ${name}`;
+  const view = $('#roleDocumentBody');
+  view.innerHTML = '<div class="loading">표 만드는 중…</div>';
+  const q = { period: period(), lang: lang() };
+  try {
+    const [d, roots] = await Promise.all([
+      api(`/table/${cik}/${encodeURIComponent(r.id)}`, q),
+      api(`/tree/${cik}/${encodeURIComponent(r.id)}`, q).catch(() => []),
+    ]);
+    if (current !== me) return;  // 그사이 다른 목차를 눌렀다
+    byId = {};
+    const index = (n, parent) => { n.parent = parent; byId[n.element_id] ??= n; n.children.forEach(c => index(c, n)); };
+    roots.forEach(x => index(x, null));
+    const axes = axisInfo(roots);
+    let struct = false;
+    const draw = () => {
+      $('#structBtn').textContent = struct ? '표 보기' : 'XBRL 구조 및 속성';
+      view.innerHTML = `<div class="role-doc-title">${esc(name)}</div>
+        <div class="role-doc-meta">${GROUPS.find(g => g[0] === r.group)?.[1] ?? ''} / ${esc(r.code)}</div>`;
+      if (struct) return view.appendChild(structTable(roots));
+      if (!d.tables.length) return view.insertAdjacentHTML('beforeend', '<div class="loading">이 목차에는 표로 만들 값이 없습니다.</div>');
+      d.tables.map(foldInstants).forEach(t => view.appendChild(
+        isText(t) ? textBox(t)
+        : r.group[0] === 'b' && !headerAxes(t.columns, axes).length ? stmtCard(t, d.units) : noteCard(t, byId, axes, $('#emptyCols').checked)));
+    };
+    $('#structBtn').onclick = () => { struct = !struct; draw(); };
+    $('#emptyCols').onchange = draw;
+    draw();
+  } catch (e) { view.innerHTML = `<div class="error-box">${esc(e)}</div>`; }
+}
+
+// 컨텍스트 ID 접두어 → 기간 이름. CFY2026eHYA = 당기(C) 2026 시점(e) 반기(HY) 누적(A).
+// P 전기 / BP 전전기, d 기간 / e 시점, HY 반기 · Q1·Q3 분기 · FY 연간, 끝의 A 누적 / Q 3개월.
+// 끝 글자가 없으면 그 회계연도 전체(전기말 = 전기 12월 말).
+function periodName(ctx) {
+  const m = ctx.split('_')[0].match(/^(BP|C|P)FY\d{4}([de])([A-Z0-9]*?)([AQ]?)$/);
+  if (!m) return '';
+  const [, who, kind, type, part] = m;
+  const w = { C: '당', P: '전', BP: '전전' }[who];
+  const unit = !part || type === 'FY' ? '기' : type === 'HY' ? '반기' : '분기';
+  if (kind === 'e') return w + unit + '말';
+  return w + unit + (!part || type === 'FY' ? '' : part === 'Q' ? ' 3개월' : ' 누적');
+}
+
+// 기간(duration) 열이 있는 표에서 시점(instant) 값(기초·기말 잔액)을 기간 열로 옮긴다.
+// 기초 라벨(periodStartLabel)이면 시작 전날, 아니면 종료일 시점 값. XBRL 렌더링 관례.
+function foldInstants(t) {
+  const dates = c => c.period.split(' ~ ');
+  let dur = t.columns.filter(c => dates(c).length === 2);
+  if (!dur.length) return t;
+  const rest = id => id.slice(id.split('_')[0].length);
+  const instCols = t.columns.filter(c => dates(c).length === 1);
+  const used = rows => t.columns.concat(extra).filter((c, i, a) => a.findIndex(x => x.contextId === c.contextId) === i
+    && rows.some(r => r.cells[c.contextId] != null));
+  let extra = [];
+  // 기간 열에 숫자가 없으면(차입금 세부정보의 '차입금에 대한 기술' 같은 문장뿐) 변동표가 아니다.
+  // 거꾸로 기간 값을 같은 종료일의 시점 열로 옮겨 시점 표 하나(당반기말)로 만든다.
+  if (!dur.some(c => t.rows.some(r => isNum(r.cells[c.contextId] ?? '')))) {
+    const pkAt = new Map(instCols.map(c => [c.period, c.contextId.split('_')[0]]));
+    const to = new Map(dur.filter(c => pkAt.has(dates(c)[1])).map(c => [c.contextId, pkAt.get(dates(c)[1]) + rest(c.contextId)]));
+    extra = dur.filter(c => to.has(c.contextId)).map(c => ({ ...c, contextId: to.get(c.contextId), period: dates(c)[1] }));
+    const rows = t.rows.map(r => {
+      const cells = { ...r.cells };
+      to.forEach((id, from) => { if (cells[from] != null) { cells[id] ??= cells[from]; delete cells[from]; } });
+      return { ...r, cells };
+    });
+    return { ...t, rows, columns: used(rows) };
+  }
+  // 시점 값에만 있는 축 조합(유형자산 변동표의 [합계] = 장부금액 축 없는 기초/기말)도 기간마다 열을 만들어
+  // 옮길 자리를 준다. 그래야 기간 블록마다 [합계] 열이 남는다. 값이 안 들어온 열은 끝에서 빠진다.
+  const pks = new Map(dur.map(c => [c.contextId.split('_')[0], c]));
+  extra = [...pks].flatMap(([pk, d]) => [...new Map(instCols.map(c => [rest(c.contextId), c])).values()]
+    .filter(c => !t.columns.some(x => x.contextId === pk + rest(c.contextId)))
+    .map(c => ({ ...c, contextId: pk + rest(c.contextId), period: d.period })));
+  dur = [...dur, ...extra];
+  t = { ...t, columns: [...t.columns, ...extra] };
+  const inst = new Map(instCols.map(c => [rest(c.contextId) + '|' + c.period, c.contextId]));
+  const dayBefore = s => new Date(Date.parse(s) - 864e5).toISOString().slice(0, 10);
+  const rows = t.rows.map(r => {
+    const cells = { ...r.cells };
+    let moved = false;
+    dur.forEach(c => {
+      const [s, e] = dates(c);
+      const ic = inst.get(rest(c.contextId) + '|' + (/periodStart/.test(r.labelRole) ? dayBefore(s) : e));
+      if (ic && cells[ic] != null && cells[c.contextId] == null) { cells[c.contextId] = cells[ic]; moved = true; }
+    });
+    // 기초/기말 행은 라벨 역할이 뜻을 정한다. 옮긴 행에 남은 다른 시점 값은 다른 행(기말/기초) 몫이다.
+    if (moved) inst.forEach(ic => delete cells[ic]);
+    return { ...r, cells };
+  });
+  return { ...t, rows, columns: t.columns.filter(c => rows.some(r => r.cells[c.contextId] != null)) };
+}
+
+// [항목] 밖에서 문장 값만 있는 상자 = KOX의 주석 문장(각주) 상자. 표가 아니라 제목 + 본문으로 보여준다.
+function isText(t) {
+  return !t.elementId && t.rows.every(r => Object.values(r.cells).every(v => !isNum(v)));
+}
+function textBox(t) {
+  const el = document.createElement('div');
+  el.innerHTML = t.rows.filter(r => Object.keys(r.cells).length).map(r =>
+    `<div class="text-section"><div class="text-section-title"${prop(r.elementId)}>${esc(r.label)}</div><p>${
+      [...new Set(Object.values(r.cells))].map(esc).join('<br>')}</p></div>`).join('');
+  return el;
+}
+
+// 열 머리글에 올릴 축. 멤버가 하나뿐이어도 축·도메인·구성요소를 다 보여주고,
+// 보고 범위일 뿐인 연결/별도 축만 뺀다(그건 목차 그룹과 상단 배지가 이미 말해 준다).
+const SCOPE_AXIS = /ConsolidatedAndSeparateFinancialStatementsAxis$/;
+function headerAxes(cols, axes) {
+  const order = [...axes.keys()];
+  return [...new Set(cols.flatMap(c => c.dims.map(dm => dm.axis)))]
+    .filter(a => !SCOPE_AXIS.test(a))
+    .sort((a, b) => (order.indexOf(a) + 1 || 1e9) - (order.indexOf(b) + 1 || 1e9));
+}
+
+// 본문: 행 = 계정(들여쓰기), 열 = 기간. 첫 행 [개요]는 제목으로 올린다.
+function stmtCard(t, units) {
+  let rows = t.rows, title = t.title, titleId = t.elementId;
+  if (rows[0]?.abstract && rows[0].depth === 0) { title = rows[0].label; titleId = rows[0].elementId; rows = rows.slice(1); }
+  const base = Math.min(...rows.map(r => r.depth));
+  // ponytail: 다른 표(자본변동표 등)와 요소를 같이 써서 몇 칸만 찬 비교 열(전반기말 등)은 뺀다.
+  // 채운 행이 가장 많은 열의 1/3 미만이면 버림. 틀리면 D999007 재무제표정보로 열을 정하는 쪽으로.
+  const n = c => rows.filter(r => r.cells[c.contextId] != null).length;
+  const max = Math.max(...t.columns.map(n));
+  const cols = t.columns.filter(c => n(c) * 3 >= max);
+  const unit = units.map(u => ({ KRW: '원', USD: '달러', SHARES: '주', KRWEPS: '원/주', PURE: '' })[u] ?? u)
+    .filter(Boolean).join(', ');
+  const card = document.createElement('div');
+  card.innerHTML = `<div class="table-section-title"${prop(titleId)}>${esc(title)}<span class="unit">(단위: ${unit || '—'})</span></div>
+    <div class="table-wrap"><table><thead><tr><th style="min-width:280px"></th>${cols.map(c =>
+      `<th style="min-width:160px">${periodName(c.contextId) || c.period}<span class="tag">${c.period}</span></th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr class="${r.abstract ? 'abs' : ''}"><td class="row-label" style="padding-left:${8 + Math.min((r.depth - base) * 14, 70)}px"${prop(r.elementId)}>${esc(r.label)}</td>${
+      cols.map(c => r.abstract ? '<td></td>' : cell(r.cells[c.contextId])).join('')}</tr>`).join('')}</tbody></table></div>`;
+  return card;
+}
+
+// 표시 트리의 축마다 그 아래 멤버 경로(축 첫 자식부터, 라벨·ID)와 트리 순서를 모은다.
+function axisInfo(roots) {
+  const axes = new Map();
+  let ord = 0;
+  const walk = n => {
+    if (!n.element_id.endsWith('Axis')) return n.children.forEach(walk);
+    const a = axes.get(n.element_id) ??
+      { label: S(n), total: n.children[0] ? S(n.children[0]) : '', members: new Map() };
+    axes.set(n.element_id, a);
+    const sub = (m, path, ids) => {
+      const p = [...path, S(m)], q = [...ids, m.element_id];
+      if (!a.members.has(m.element_id)) a.members.set(m.element_id, { path: p, ids: q, ord: ord++ });
+      m.children.forEach(c => sub(c, p, q));
+    };
+    n.children.forEach(c => sub(c, [], []));
+  };
+  roots.forEach(walk);
+  return axes;
+}
+
+// 주석(또는 축이 있는 본문): [항목]마다 상자 하나, 기간마다 표 하나. 열 머리글은 축 → 멤버 경로.
+function noteCard(t, byId, axes, showEmpty) {
+  const memberOf = (c, a) => c.dims.find(dm => dm.axis === a)?.member ?? null;
+  // 하위 멤버가 있는 상위 멤버는 열을 만들지 않고 머리글 묶음으로만 쓴다.
+  // 같은 기간·같은 축 구성에서 모든 축 멤버가 같거나 하위인 열이 있으면 상위 열을 뺀다.
+  // 하위 멤버 열이 하나도 없으면 상위 열을 남긴다. 안 그러면 공시된 값이 화면에서 사라진다.
+  const below = (c, d) => c.contextId.split('_')[0] === d.contextId.split('_')[0] && c.dims.every(({ axis, member }) => {
+    const m = memberOf(d, axis);
+    return m === member || axes.get(axis)?.members.get(m)?.ids.includes(member);
+  }) && c.dims.some(({ axis, member }) => memberOf(d, axis) !== member);
+  const base = t.columns.filter(c => !t.columns.some(d => d !== c && d.dims.length === c.dims.length && below(c, d)));
+  const cols = showEmpty && t.cube ? [...base, ...emptyColumns(t.cube, base, axes)] : base;
+  const varying = headerAxes(cols, axes);
+
+  // 열마다 머리글 경로(축 → 상위 멤버 → 멤버)와 정렬 키. 축이 없는 컨텍스트는 그 축의 [합계].
+  const keyed = cols.map(c => {
+    const pk = c.contextId.split('_')[0], path = [], ord = [];
+    // 이 축부터 끝까지 전부 [합계]면 첫 [합계]에서 머리글을 끝낸다(총계 열은 아래로 병합).
+    const stop = varying.findIndex((a, i) => varying.slice(i).every(x => !memberOf(c, x)));
+    varying.slice(0, stop < 0 ? undefined : stop + 1).forEach(a => {
+      const info = axes.get(a), m = memberOf(c, a), hit = m && info?.members.get(m);
+      path.push(info?.label ?? a.split('_').pop());
+      if (hit) { path.push(...hit.path); ord.push(hit.ord); }
+      else if (m) { path.push(c.members[c.dims.findIndex(dm => dm.axis === a)]); ord.push(1e9 - 1); }
+      else { path.push(`${info?.total ?? ''} [합계]`.trim()); ord.push(1e9); }
+    });
+    while (ord.length < varying.length) ord.push(1e9);
+    if (!path.length) path.push(periodName(pk) || c.period);
+    return { c, pk, path, ord };
+  });
+  const byOrd = (a, b) => { for (let i = 0; i < a.ord.length; i++) if (a.ord[i] !== b.ord[i]) return a.ord[i] - b.ord[i]; return 0; };
+  const pks = [...new Set(keyed.map(k => k.pk))];
+  const date = pk => keyed.find(k => k.pk === pk).c.period;
+  const pname = pk => periodName(pk) || date(pk);
+
+  // [항목] 위의 [문장영역] · [개요]와 그 아래 [표]·[축]·[항목]을 요약 상자로 보여준다.
+  const group = byId[t.elementId]?.parent;
+  let html = '';
+  if (group) {
+    const lines = group.children.flatMap(n =>
+      n.element_id.endsWith('Table')
+        ? [[0, n], ...n.children.filter(x => x.element_id.endsWith('Axis')).map(x => [1, x])]
+        : n.element_id.endsWith('LineItems') ? [[1, n]] : []);
+    const text = group.parent && /Explanatory|TextBlock/.test(group.parent.element_id) ? group.parent : null;
+    html += '<div class="note-overview">';
+    if (text) html += `<div class="note-overview-heading"${prop(text.element_id)}>${esc(L(text))}</div>`;
+    html += `<div class="note-overview-heading"${prop(group.element_id)}>${esc(L(group))}</div>` +
+      lines.map(([l, n]) => `<div class="note-context-level l${l}"${prop(n.element_id)}>${esc(L(n))}</div>`).join('') + '</div>';
+  }
+  html += `<div class="table-section-title"${prop(t.elementId)}>${esc(t.title || '표')}</div>`;
+  html += `<details class="psel"><summary></summary><div class="opts">${pks.map(pk =>
+    `<label><input type="checkbox" value="${pk}" checked> ${pname(pk)} <span class="tag">${date(pk)}</span></label>`
+  ).join('')}</div></details><div class="tables"></div>`;
+
+  const card = document.createElement('div');
+  card.className = 'note-table-block';
+  card.innerHTML = html;
+  const render = () => {
+    const on = [...card.querySelectorAll('.psel input:checked')].map(i => i.value);
+    card.querySelector('.psel summary').textContent = on.map(pname).join(', ') || '기간 선택';
+    card.querySelector('.tables').innerHTML = on.map(pk =>
+      `<div class="period-title">(기간: ${pname(pk)} · ${date(pk)})</div>` +
+      gridTable(t, keyed.filter(k => k.pk === pk).sort(byOrd))).join('');
+  };
+  card.querySelector('.psel').onchange = render;
+  render();
+  return card;
+}
+
+// 빈 열 표시: 표 하이퍼큐브(정의 링크베이스)의 축마다 [최하위 멤버…, 합계]를 조합해
+// 값 없는 열도 만든다. 축 하나가 [합계]면 그 안쪽 축은 더 나누지 않는다(2×(2×(2+1)+1)+1 = 15열 꼴).
+// ponytail: 표시 트리에 없는 멤버는 라벨·순서를 몰라 뺀다. 필요하면 API가 def 라벨·순서도 내려주게.
+function emptyColumns(cube, cols, axes) {
+  const ax = headerAxes([{ dims: Object.keys(cube).map(axis => ({ axis })) }], axes);
+  const leaves = a => {
+    const info = axes.get(a), ms = cube[a].filter(m => info?.members.has(m));
+    return ms.filter(m => !ms.some(x => x !== m && info.members.get(x).ids.includes(m)));
+  };
+  const combos = i => i === ax.length ? [[]]
+    : [...leaves(ax[i]).flatMap(m => combos(i + 1).map(rest => [{ axis: ax[i], member: m }, ...rest])), []];
+  const key = dims => dims.filter(d => !SCOPE_AXIS.test(d.axis)).map(d => d.axis + '=' + d.member).sort().join('|');
+  const have = new Set(cols.map(c => key(c.dims)));
+  const byPk = new Map(cols.map(c => [c.contextId.split('_')[0], c.period]));
+  return [...byPk].flatMap(([pk, period]) => combos(0).filter(d => !have.has(key(d)))
+    .map((dims, i) => ({ contextId: `${pk}_empty${i}`, period, dims, members: [] })));
+}
+
+// 행·열 머리글을 병합 셀로 그린다. 행 머리글은 [항목] 제목 → 상위 행 → 자기 자신 순이고,
+// 값이 있는 상위 행은 자기 줄을 따로 갖는다(KOX 뷰어와 같은 모양).
+function gridTable(t, ks) {
+  const cols = ks.map(k => k.c);
+  const stack = [], rows = [];
+  t.rows.forEach((r, i) => {
+    stack.length = r.depth;
+    const ids = [...stack, i];
+    stack.push(i);
+    if (!r.abstract && cols.some(c => r.cells[c.contextId] != null)) rows.push(t.title ? ['T', ...ids] : ids);
+  });
+  if (!rows.length) return '<div class="loading">이 기간에는 값이 없습니다.</div>';
+  const lab = id => id === 'T' ? `${prop(t.elementId)}>${esc(t.title)}` : `${prop(t.rows[id].elementId)}>${esc(t.rows[id].label)}`;
+  const nLab = Math.max(...rows.map(p => p.length));
+
+  const paths = ks.map(k => k.path), L = Math.max(...paths.map(p => p.length));
+  const key = (p, i) => p.slice(0, i + 1).join('\u0001');
+  const same = (a, b, i) => a && b && a.length > i && b.length > i && key(a, i) === key(b, i)
+    && (a.length - 1 === i) === (b.length - 1 === i);
+  let head = '';
+  for (let i = 0; i < L; i++) {
+    head += '<tr>' + (i ? '' : `<th class="kox-left-corner" colspan="${nLab}" rowspan="${L}"></th>`);
+    paths.forEach((p, j) => {
+      if (p.length <= i || same(paths[j - 1], p, i)) return;
+      let span = 1;
+      while (same(paths[j + span], p, i)) span++;
+      head += `<th colspan="${span}" rowspan="${i === p.length - 1 ? L - i : 1}">${esc(p[i])}</th>`;
+    });
+    head += '</tr>';
+  }
+
+  const body = rows.map((p, k) => {
+    const cont = (q, i) => q && q.length - 1 > i && q[i] === p[i];
+    let th = '';
+    p.forEach((id, i) => {
+      if (i === p.length - 1) { th += `<td class="row-label row-group-cell" colspan="${nLab - i}"${lab(id)}</td>`; return; }
+      if (cont(rows[k - 1], i)) return;
+      let span = 1;
+      while (cont(rows[k + span], i)) span++;
+      th += `<td class="row-label row-group-cell" rowspan="${span}"${lab(id)}</td>`;
+    });
+    const r = t.rows[p[p.length - 1]];
+    return `<tr>${th}${cols.map(c => cell(r.cells[c.contextId])).join('')}</tr>`;
+  }).join('');
+  return `<div class="table-wrap"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+
+// XBRL 구조 및 속성: 표시 트리를 한 줄에 요소 하나로 펼친다.
+function structTable(roots) {
+  const rows = [];
+  const walk = (n, d) => { rows.push([n, d]); n.children.forEach(c => walk(c, d + 1)); };
+  roots.forEach(r => walk(r, 0));
+  const el = document.createElement('div');
+  el.className = 'table-wrap';
+  el.innerHTML = `<table class="struct"><thead><tr>${['표시 한글명', 'Prefix', '표시 영어명', 'ID', '기본 한글명',
+    '기본 영어명', '라벨 역할', '데이터 타입', '기간 유형', '차/대'].map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${
+    rows.map(([n, d]) => `<tr class="${n.abstract ? 'abs' : ''}">${[
+      `<span style="padding-left:${d * 14}px">${d ? '↳ ' : ''}${esc(n.korean_label)}</span>`,
+      esc(n.element_id.split('_')[0]), esc(n.english_label), esc(n.element_id), esc(n.korean_std), esc(n.english_std),
+      esc(n.label_role), esc((n.data_type || '').split(':').pop()), n.period_type || '', n.balance || '',
+    ].map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  return el;
+}
+
+/* ---- 속성 패널 ---- */
+function showPropertyPanel(n) {
+  const rows = [
+    ['ID', n.element_id], ['표현 속성', n.label_role], ['기본 한글명', n.korean_std], ['기본 영문명', n.english_std],
+    ['표시 한글명', n.korean_label], ['표시 영문명', n.english_label], ['요소 구분', n.abstract ? 'Abstract' : 'Item'],
+    ['데이터 타입', (n.data_type || '').split(':').pop()], ['차변/대변', n.balance], ['기간 속성', n.period_type],
+  ];
+  $('#propertyBody').innerHTML = '<div class="property-help">요소명을 클릭해 속성을 확인해 보세요.</div>' +
+    rows.map(([k, v]) => `<div class="property-row"><strong>${k}</strong><span>${esc(v || '-')}</span></div>`).join('');
+  $('#propertyPanel').classList.add('open');
+}
+document.addEventListener('mouseover', e => {
+  const el = e.target.closest('[data-eid]');
+  if (el && byId[el.dataset.eid]) el.classList.add('xbrl-prop-clickable');
+});
+document.addEventListener('click', e => {
+  const n = byId[e.target.closest('[data-eid]')?.dataset.eid];
+  if (n) showPropertyPanel(n);
+});
+$('#propertyCloseBtn').onclick = () => $('#propertyPanel').classList.remove('open');
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#propertyPanel').classList.remove('open'); });
+
+/* ---- 기초 정보: 보고서 메타 + D999xxx 보고서정보 목차를 한 패널에 ---- */
+// KOX 뷰어 순서: 기업 → 주소 → 문서 → 작성자 → 기간 → 감사, 그 뒤 재무제표 정보.
+const INFO_ORDER = ['D999004', 'D999005', 'D999001', 'D999006', 'D999002', 'D999003', 'D999007'];
+async function showInfo() {
+  current = showInfo;
+  activate('[data-info]');
+  $('#pill').textContent = 'DART';
+  $('#pill').classList.remove('hidden');
+  $('#basic').classList.remove('hidden');
+  const meta = [['회사명', esc(company.name)], ['영문명', esc(company.eng_name || '-')], ['고유번호', `<span class="mono">${cik}</span>`],
+    ['종목코드', `<span class="mono">${company.stock_code || '-'}</span>`], ['보고서 유형', esc(reportKind(period()))],
+    ['보고서 기간', `<span class="mono">${esc(period())}</span>`], ['기준일', ymd(company.report_date)]];
+  const basic = `<table class="info-grid">${meta.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('')}</table>`;
+  $('#basicBody').innerHTML = basic + '<div class="loading">보고서정보 불러오는 중…</div>';
+  const rs = roles.filter(r => r.group === 'info')
+    .sort((a, b) => (INFO_ORDER.indexOf(a.code) + 1 || 99) - (INFO_ORDER.indexOf(b.code) + 1 || 99));
+  const ds = await Promise.all(rs.map(r => api(`/table/${cik}/${encodeURIComponent(r.id)}`,
+    { period: period(), lang: lang() }).catch(() => ({ tables: [] }))));
+  if (current !== showInfo) return;
+  const en = lang() === 'en';
+  const title = r => en ? r.nameEn : r.name.split(' - ').pop();
+  // 라벨이 "공시대상,법인명" 꼴이다. 쉼표 앞은 표 이름이라 뗀다.
+  const label = s => s.replace(/^[^,]*,\s*/, '');
+  const val = v => v == null ? '' : !en && v === 'true' ? '예' : !en && v === 'false' ? '아니오' : esc(v);
+  const member = s => esc(s.replace(/\s*\[(member|구성요소)\]$/, ''));
+  const section = (r, d) => `<div class="info-sub">${esc(title(r))}</div>${d.tables.map(t => {
+    const rows = t.rows.filter(x => !x.abstract && t.columns.some(c => x.cells[c.contextId] != null));
+    if (t.columns.length === 1) {
+      const c = t.columns[0].contextId;
+      return `<table class="info-grid">${rows.map(x => `<tr><th>${esc(label(x.label))}</th><td>${val(x.cells[c])}</td></tr>`).join('')}</table>`;
+    }
+    return `<div class="table-wrap"><table><thead><tr><th></th>${t.columns.map(c =>
+      `<th>${member(c.members.at(-1) ?? c.period)}</th>`).join('')}</tr></thead><tbody>${rows.map(x =>
+      `<tr><td class="row-label">${esc(label(x.label))}</td>${t.columns.map(c => `<td>${val(x.cells[c.contextId])}</td>`).join('')}</tr>`
+    ).join('')}</tbody></table></div>`;
+  }).join('')}`;
+  $('#basicBody').innerHTML = basic + rs.map((r, i) => section(r, ds[i])).join('');
+}
+
+init().catch(e => { $('#loading').innerHTML = `<div class="error-box"><strong>XBRL 데이터 로드 오류</strong>\n${esc(e)}</div>`; });
+</script>
+</body>
+</html>
